@@ -23,7 +23,7 @@ final ebayRepositoryProvider = AutoDisposeProvider<EbayRepository>.internal(
 @Deprecated('Will be removed in 3.0. Use Ref instead')
 // ignore: unused_element
 typedef EbayRepositoryRef = AutoDisposeProviderRef<EbayRepository>;
-String _$ebayListingsHash() => r'c8ee0135f568607e056d9bc7efdf448de4c30e3d';
+String _$ebayListingsHash() => r'c377c8869c631c85571effb9f58a3fe85c2d1cdb';
 
 /// Copied from Dart SDK
 class _SystemHash {

@@ -11,11 +11,16 @@ class ItemRepository {
     String? country,
     String? gradingCompany,
     bool? isSlabbed,
-    String? searchQuery,
+    String? series,
+    double? minGrade,
+    double? maxGrade,
+    String? mintMark,
+    int? minYear,
+    int? maxYear,
+    String sortBy = 'date_added',
     int limit = 50,
     int offset = 0,
   }) async {
-    // Apply filters before order/range — filters require PostgrestFilterBuilder
     var q = supabase
         .from(DbConstants.items)
         .select('*, catalog_references(*), item_images(*)');
@@ -24,9 +29,24 @@ class ItemRepository {
     if (country != null) q = q.ilike('country', '%$country%');
     if (gradingCompany != null) q = q.eq('grading_company', gradingCompany);
     if (isSlabbed != null) q = q.eq('is_slabbed', isSlabbed);
+    if (series != null && series != 'All US Coins' && series != 'All World & Ancient'
+        && series != 'All Paper Money' && series != 'All Exonumia') {
+      q = q.ilike('series', '%$series%');
+    }
+    if (minGrade != null) q = q.gte('grade_numeric', minGrade);
+    if (maxGrade != null) q = q.lte('grade_numeric', maxGrade);
+    if (mintMark != null) q = q.ilike('mint_mark', '%$mintMark%');
+    if (minYear != null) q = q.gte('year_start', minYear);
+    if (maxYear != null) q = q.lte('year_start', maxYear);
+
+    final orderCol = switch (sortBy) {
+      'year'  => 'year_start',
+      'grade' => 'grade_numeric',
+      _       => 'updated_at',
+    };
 
     final data = await q
-        .order('updated_at', ascending: false)
+        .order(orderCol, ascending: sortBy == 'year')
         .range(offset, offset + limit - 1) as List;
     return data.map((row) => _rowToItem(row as Map<String, dynamic>)).toList();
   }

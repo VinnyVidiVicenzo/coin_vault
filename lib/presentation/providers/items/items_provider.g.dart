@@ -23,7 +23,7 @@ final itemRepositoryProvider = AutoDisposeProvider<ItemRepository>.internal(
 @Deprecated('Will be removed in 3.0. Use Ref instead')
 // ignore: unused_element
 typedef ItemRepositoryRef = AutoDisposeProviderRef<ItemRepository>;
-String _$filteredItemsHash() => r'b52e7a0d5727ea841fd15e89fd3d0436ba802f81';
+String _$filteredItemsHash() => r'371880a838f59553d922f11d1f5c058550ac1817';
 
 /// See also [filteredItems].
 @ProviderFor(filteredItems)
@@ -206,7 +206,7 @@ class _ItemDetailProviderElement
   String get id => (origin as ItemDetailProvider).id;
 }
 
-String _$itemFilterHash() => r'bb90a4050202aff64282e78c00364c24ed579322';
+String _$itemFilterHash() => r'a84072416d467d70057302f5551f81381c6093fe';
 
 /// See also [ItemFilter].
 @ProviderFor(ItemFilter)
