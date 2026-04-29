@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 import '../../providers/items/items_provider.dart';
+import '../../widgets/common/gradient_card.dart';
 import '../../../core/theme/app_colors.dart';
 
 class DashboardScreen extends ConsumerWidget {
@@ -12,8 +13,24 @@ class DashboardScreen extends ConsumerWidget {
     final items = ref.watch(itemsListProvider);
 
     return Scaffold(
+      backgroundColor: AppColors.surface,
       appBar: AppBar(
-        title: const Text('Coin Vault'),
+        title: Row(
+          children: [
+            Container(
+              width: 28,
+              height: 28,
+              decoration: BoxDecoration(
+                gradient: AppColors.accentGradient,
+                borderRadius: BorderRadius.circular(7),
+              ),
+              child: const Icon(Icons.monetization_on,
+                  color: AppColors.primary, size: 18),
+            ),
+            const SizedBox(width: 10),
+            const Text('Coin Vault'),
+          ],
+        ),
         actions: [
           IconButton(
             icon: const Icon(Icons.settings_outlined),
@@ -24,39 +41,182 @@ class DashboardScreen extends ConsumerWidget {
       body: RefreshIndicator(
         onRefresh: () => ref.read(itemsListProvider.notifier).refresh(),
         child: ListView(
-          padding: const EdgeInsets.all(16),
+          padding: const EdgeInsets.fromLTRB(16, 8, 16, 100),
           children: [
-            Text(
-              'Collection Overview',
-              style: Theme.of(context).textTheme.titleLarge?.copyWith(
-                    fontWeight: FontWeight.bold,
-                  ),
-            ),
-            const SizedBox(height: 16),
+            // ── Hero stats card ──────────────────────────────
             items.when(
-              loading: () => const Center(child: CircularProgressIndicator()),
-              error: (e, _) => Text('Error: $e'),
-              data: (list) => _StatsGrid(items: list),
+              loading: () => const _HeroSkeleton(),
+              error: (_, __) => const SizedBox.shrink(),
+              data: (list) {
+                final slabbed = list.where((i) => i.isSlabbed).length;
+                final coins = list.where((i) => i.itemType == 'coin').length;
+                final notes = list.where((i) => i.itemType == 'note').length;
+
+                return GradientCard(
+                  colors: [AppColors.primaryMid, AppColors.primarySurface],
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Row(
+                        children: [
+                          Text(
+                            'Your Collection',
+                            style: TextStyle(
+                              color: Colors.white.withValues(alpha: 0.7),
+                              fontSize: 12,
+                              fontWeight: FontWeight.w500,
+                              letterSpacing: 1.2,
+                            ),
+                          ),
+                          const Spacer(),
+                          Container(
+                            padding: const EdgeInsets.symmetric(
+                                horizontal: 10, vertical: 4),
+                            decoration: BoxDecoration(
+                              color: AppColors.accent.withValues(alpha: 0.15),
+                              borderRadius: BorderRadius.circular(20),
+                              border: Border.all(
+                                  color: AppColors.accent.withValues(alpha: 0.3)),
+                            ),
+                            child: const Text('ACTIVE',
+                                style: TextStyle(
+                                    color: AppColors.accent,
+                                    fontSize: 10,
+                                    fontWeight: FontWeight.bold,
+                                    letterSpacing: 1)),
+                          ),
+                        ],
+                      ),
+                      const SizedBox(height: 20),
+                      Row(
+                        children: [
+                          GlowingStat(
+                              value: list.length.toString(),
+                              label: 'TOTAL ITEMS',
+                              color: AppColors.accent),
+                          const SizedBox(width: 32),
+                          GlowingStat(
+                              value: slabbed.toString(),
+                              label: 'SLABBED',
+                              color: AppColors.cyan),
+                          const SizedBox(width: 32),
+                          GlowingStat(
+                              value: coins.toString(),
+                              label: 'COINS',
+                              color: Colors.white),
+                          const SizedBox(width: 32),
+                          GlowingStat(
+                              value: notes.toString(),
+                              label: 'NOTES',
+                              color: Colors.white70),
+                        ],
+                      ),
+                      const SizedBox(height: 20),
+                      // Progress bar — slabbed ratio
+                      if (list.isNotEmpty) ...[
+                        Text(
+                          '${((slabbed / list.length) * 100).toStringAsFixed(0)}% slabbed',
+                          style: TextStyle(
+                              color: Colors.white.withValues(alpha: 0.5),
+                              fontSize: 11),
+                        ),
+                        const SizedBox(height: 6),
+                        ClipRRect(
+                          borderRadius: BorderRadius.circular(4),
+                          child: LinearProgressIndicator(
+                            value: slabbed / list.length,
+                            backgroundColor:
+                                Colors.white.withValues(alpha: 0.1),
+                            valueColor: const AlwaysStoppedAnimation(
+                                AppColors.cyan),
+                            minHeight: 5,
+                          ),
+                        ),
+                      ],
+                    ],
+                  ),
+                );
+              },
             ),
-            const SizedBox(height: 24),
+
+            const SizedBox(height: 20),
+
+            // ── Quick actions ────────────────────────────────
+            _SectionLabel('Quick Actions'),
+            const SizedBox(height: 10),
             Row(
-              mainAxisAlignment: MainAxisAlignment.spaceBetween,
               children: [
-                Text('Quick Actions',
-                    style: Theme.of(context).textTheme.titleMedium),
+                Expanded(
+                  child: _ActionButton(
+                    icon: Icons.add_circle_outline,
+                    label: 'Add Item',
+                    color: AppColors.primaryMid,
+                    onTap: () => context.push('/items/new'),
+                  ),
+                ),
+                const SizedBox(width: 10),
+                Expanded(
+                  child: _ActionButton(
+                    icon: Icons.grid_view,
+                    label: 'Browse',
+                    color: AppColors.primaryLight,
+                    onTap: () => context.go('/collection'),
+                  ),
+                ),
+                const SizedBox(width: 10),
+                Expanded(
+                  child: _ActionButton(
+                    icon: Icons.location_on_outlined,
+                    label: 'Storage',
+                    color: const Color(0xFF1A3A5C),
+                    onTap: () => context.push('/storage'),
+                  ),
+                ),
               ],
             ),
-            const SizedBox(height: 12),
-            _QuickActionsRow(),
+
             const SizedBox(height: 24),
+
+            // ── Integrations ─────────────────────────────────
+            _SectionLabel('Integrations'),
+            const SizedBox(height: 10),
+
+            // eBay
+            _IntegrationCard(
+              title: 'eBay',
+              subtitle: 'Connect your seller account to sync listings',
+              logoWidget: _EbayLogo(),
+              connected: false,
+              statusLabel: 'Not connected',
+              colors: [const Color(0xFF0064D2), const Color(0xFF003D7A)],
+              onConnect: () => _showEbayConnectDialog(context),
+              onManage: () => context.push('/integrations/ebay'),
+            ),
+
+            const SizedBox(height: 12),
+
+            // WordPress / Website
+            _IntegrationCard(
+              title: 'vincenzofazeli.com',
+              subtitle: 'Publish your collection to your WordPress site',
+              logoWidget: _WpLogo(),
+              connected: false,
+              statusLabel: 'Not connected',
+              colors: [const Color(0xFF21759B), const Color(0xFF0F3D52)],
+              onConnect: () => _showWpConnectDialog(context),
+              onManage: () => context.push('/integrations/wordpress'),
+            ),
+
+            const SizedBox(height: 24),
+
+            // ── Recent items ─────────────────────────────────
             Row(
-              mainAxisAlignment: MainAxisAlignment.spaceBetween,
               children: [
-                Text('Recent Items',
-                    style: Theme.of(context).textTheme.titleMedium),
+                const Expanded(child: _SectionLabel('Recent Items')),
                 TextButton(
                   onPressed: () => context.go('/collection'),
-                  child: const Text('View all'),
+                  child: const Text('View all',
+                      style: TextStyle(fontSize: 12)),
                 ),
               ],
             ),
@@ -66,21 +226,46 @@ class DashboardScreen extends ConsumerWidget {
               error: (_, __) => const SizedBox.shrink(),
               data: (list) => Column(
                 children: list.take(5).map((item) {
-                  return ListTile(
-                    leading: const CircleAvatar(
-                      backgroundColor: AppColors.primary,
-                      child: Icon(Icons.monetization_on, color: Colors.white, size: 20),
+                  final parts = [
+                    item.yearStart?.toString(),
+                    item.series ?? item.denomination ?? item.country,
+                  ].whereType<String>();
+
+                  return Container(
+                    margin: const EdgeInsets.only(bottom: 8),
+                    decoration: BoxDecoration(
+                      color: Colors.white,
+                      borderRadius: BorderRadius.circular(14),
+                      border: Border.all(color: Colors.grey.shade100),
                     ),
-                    title: Text(
-                      [
-                        item.country,
-                        item.denomination,
-                        item.yearStart?.toString(),
-                      ].whereType<String>().join(' • '),
+                    child: ListTile(
+                      contentPadding: const EdgeInsets.symmetric(
+                          horizontal: 16, vertical: 4),
+                      leading: Container(
+                        width: 40,
+                        height: 40,
+                        decoration: BoxDecoration(
+                          gradient: AppColors.primaryGradient,
+                          borderRadius: BorderRadius.circular(10),
+                        ),
+                        child: const Icon(Icons.monetization_on,
+                            color: AppColors.accent, size: 20),
+                      ),
+                      title: Text(
+                        parts.join(' '),
+                        style: const TextStyle(
+                            fontSize: 13, fontWeight: FontWeight.w600),
+                      ),
+                      subtitle: item.grade != null
+                          ? Text(
+                              '${item.gradingCompany ?? ''} ${item.grade ?? ''}',
+                              style: const TextStyle(fontSize: 11),
+                            )
+                          : null,
+                      trailing: const Icon(Icons.chevron_right,
+                          size: 18, color: Colors.grey),
+                      onTap: () => context.push('/items/${item.id}'),
                     ),
-                    subtitle: item.grade != null ? Text(item.grade!) : null,
-                    trailing: const Icon(Icons.chevron_right),
-                    onTap: () => context.push('/items/${item.id}'),
                   );
                 }).toList(),
               ),
@@ -90,109 +275,319 @@ class DashboardScreen extends ConsumerWidget {
       ),
     );
   }
-}
 
-class _StatsGrid extends StatelessWidget {
-  final List items;
-  const _StatsGrid({required this.items});
+  void _showEbayConnectDialog(BuildContext context) {
+    showDialog(
+      context: context,
+      builder: (_) => AlertDialog(
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
+        title: Row(
+          children: [
+            _EbayLogo(),
+            const SizedBox(width: 10),
+            const Text('Connect eBay'),
+          ],
+        ),
+        content: Column(
+          mainAxisSize: MainAxisSize.min,
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            const Text(
+              'To connect your eBay seller account you need a free eBay Developer account.',
+              style: TextStyle(fontSize: 13),
+            ),
+            const SizedBox(height: 16),
+            _StepItem(
+                number: '1',
+                text: 'Go to developer.ebay.com and create a free account'),
+            _StepItem(
+                number: '2',
+                text: 'Create an application and copy your Client ID & Secret'),
+            _StepItem(
+                number: '3',
+                text:
+                    'Return here and paste your credentials to activate sync'),
+            const SizedBox(height: 12),
+            Container(
+              padding: const EdgeInsets.all(12),
+              decoration: BoxDecoration(
+                color: AppColors.cyan.withValues(alpha: 0.08),
+                borderRadius: BorderRadius.circular(10),
+                border: Border.all(
+                    color: AppColors.cyan.withValues(alpha: 0.2)),
+              ),
+              child: const Text(
+                'Once connected, Coin Vault will automatically track your eBay listings and mark items as sold.',
+                style: TextStyle(fontSize: 12),
+              ),
+            ),
+          ],
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(context),
+            child: const Text('Later'),
+          ),
+          FilledButton(
+            onPressed: () {
+              Navigator.pop(context);
+              // TODO: open developer.ebay.com
+            },
+            child: const Text('Open eBay Developer'),
+          ),
+        ],
+      ),
+    );
+  }
 
-  @override
-  Widget build(BuildContext context) {
-    final byType = <String, int>{};
-    for (final item in items) {
-      byType[item.itemType] = (byType[item.itemType] ?? 0) + 1;
-    }
-    final slabbed = items.where((i) => i.isSlabbed).length;
-
-    return GridView.count(
-      crossAxisCount: 2,
-      shrinkWrap: true,
-      physics: const NeverScrollableScrollPhysics(),
-      mainAxisSpacing: 12,
-      crossAxisSpacing: 12,
-      childAspectRatio: 1.6,
-      children: [
-        _StatCard(
-          label: 'Total Items',
-          value: items.length.toString(),
-          icon: Icons.inventory_2_outlined,
-          color: AppColors.primary,
+  void _showWpConnectDialog(BuildContext context) {
+    showDialog(
+      context: context,
+      builder: (_) => AlertDialog(
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
+        title: Row(
+          children: [
+            _WpLogo(),
+            const SizedBox(width: 10),
+            const Text('Connect Website'),
+          ],
         ),
-        _StatCard(
-          label: 'Slabbed',
-          value: slabbed.toString(),
-          icon: Icons.verified_outlined,
-          color: AppColors.accent,
-          iconColor: AppColors.accentDark,
-          textColor: AppColors.accentDark,
+        content: Column(
+          mainAxisSize: MainAxisSize.min,
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            const Text(
+              'Publish your collection to vincenzofazeli.com so visitors can browse your coins.',
+              style: TextStyle(fontSize: 13),
+            ),
+            const SizedBox(height: 16),
+            _StepItem(
+                number: '1',
+                text:
+                    'In Claude.ai chat, type /mcp and select "claude.ai WordPress.com"'),
+            _StepItem(
+                number: '2',
+                text: 'Log in with your WordPress.com account'),
+            _StepItem(
+                number: '3',
+                text:
+                    'Claude will install the Coin Vault plugin and display your collection'),
+            const SizedBox(height: 12),
+            Container(
+              padding: const EdgeInsets.all(12),
+              decoration: BoxDecoration(
+                color: const Color(0xFF21759B).withValues(alpha: 0.08),
+                borderRadius: BorderRadius.circular(10),
+                border: Border.all(
+                    color: const Color(0xFF21759B).withValues(alpha: 0.2)),
+              ),
+              child: const Text(
+                'Items marked as "Public" in the app will appear on your website automatically.',
+                style: TextStyle(fontSize: 12),
+              ),
+            ),
+          ],
         ),
-        _StatCard(
-          label: 'Coins',
-          value: (byType['coin'] ?? 0).toString(),
-          icon: Icons.circle_outlined,
-          color: Colors.blue,
-        ),
-        _StatCard(
-          label: 'Notes',
-          value: (byType['note'] ?? 0).toString(),
-          icon: Icons.article_outlined,
-          color: Colors.green,
-        ),
-      ],
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(context),
+            child: const Text('Later'),
+          ),
+          FilledButton(
+            onPressed: () => Navigator.pop(context),
+            child: const Text('Got it'),
+          ),
+        ],
+      ),
     );
   }
 }
 
-class _StatCard extends StatelessWidget {
-  final String label;
-  final String value;
-  final IconData icon;
-  final Color color;
-  final Color? iconColor;
-  final Color? textColor;
+// ── Widgets ─────────────────────────────────────────────────────────
 
-  const _StatCard({
-    required this.label,
-    required this.value,
+class _SectionLabel extends StatelessWidget {
+  final String text;
+  const _SectionLabel(this.text);
+
+  @override
+  Widget build(BuildContext context) => Text(
+        text,
+        style: const TextStyle(
+          fontSize: 13,
+          fontWeight: FontWeight.w700,
+          color: AppColors.primary,
+          letterSpacing: 0.3,
+        ),
+      );
+}
+
+class _ActionButton extends StatelessWidget {
+  final IconData icon;
+  final String label;
+  final Color color;
+  final VoidCallback onTap;
+
+  const _ActionButton({
     required this.icon,
+    required this.label,
     required this.color,
-    this.iconColor,
-    this.textColor,
+    required this.onTap,
+  });
+
+  @override
+  Widget build(BuildContext context) => GestureDetector(
+        onTap: onTap,
+        child: Container(
+          padding: const EdgeInsets.symmetric(vertical: 16),
+          decoration: BoxDecoration(
+            gradient: LinearGradient(
+              begin: Alignment.topLeft,
+              end: Alignment.bottomRight,
+              colors: [color, color.withValues(alpha: 0.8)],
+            ),
+            borderRadius: BorderRadius.circular(16),
+            boxShadow: [
+              BoxShadow(
+                color: color.withValues(alpha: 0.3),
+                blurRadius: 12,
+                offset: const Offset(0, 5),
+              ),
+            ],
+          ),
+          child: Column(
+            children: [
+              Icon(icon, color: Colors.white, size: 24),
+              const SizedBox(height: 6),
+              Text(
+                label,
+                style: const TextStyle(
+                  color: Colors.white,
+                  fontSize: 11,
+                  fontWeight: FontWeight.w600,
+                ),
+              ),
+            ],
+          ),
+        ),
+      );
+}
+
+class _IntegrationCard extends StatelessWidget {
+  final String title;
+  final String subtitle;
+  final Widget logoWidget;
+  final bool connected;
+  final String statusLabel;
+  final List<Color> colors;
+  final VoidCallback onConnect;
+  final VoidCallback onManage;
+
+  const _IntegrationCard({
+    required this.title,
+    required this.subtitle,
+    required this.logoWidget,
+    required this.connected,
+    required this.statusLabel,
+    required this.colors,
+    required this.onConnect,
+    required this.onManage,
   });
 
   @override
   Widget build(BuildContext context) {
-    return Card(
+    return Container(
+      decoration: BoxDecoration(
+        color: Colors.white,
+        borderRadius: BorderRadius.circular(16),
+        border: Border.all(color: Colors.grey.shade100),
+        boxShadow: [
+          BoxShadow(
+            color: Colors.black.withValues(alpha: 0.04),
+            blurRadius: 10,
+            offset: const Offset(0, 4),
+          ),
+        ],
+      ),
       child: Padding(
         padding: const EdgeInsets.all(16),
         child: Row(
           children: [
+            // Logo container
             Container(
-              padding: const EdgeInsets.all(10),
+              width: 48,
+              height: 48,
               decoration: BoxDecoration(
-                color: color.withValues(alpha: 0.1),
-                borderRadius: BorderRadius.circular(10),
-              ),
-              child: Icon(icon, color: iconColor ?? color, size: 24),
-            ),
-            const SizedBox(width: 12),
-            Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              mainAxisAlignment: MainAxisAlignment.center,
-              children: [
-                Text(
-                  value,
-                  style: Theme.of(context).textTheme.titleLarge?.copyWith(
-                        fontWeight: FontWeight.bold,
-                        color: textColor ?? color,
-                      ),
+                gradient: LinearGradient(
+                  begin: Alignment.topLeft,
+                  end: Alignment.bottomRight,
+                  colors: colors,
                 ),
-                Text(label,
-                    style: Theme.of(context)
-                        .textTheme
-                        .bodySmall
-                        ?.copyWith(color: Colors.grey)),
-              ],
+                borderRadius: BorderRadius.circular(13),
+              ),
+              child: Center(child: logoWidget),
+            ),
+            const SizedBox(width: 14),
+            // Title & subtitle
+            Expanded(
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Text(title,
+                      style: const TextStyle(
+                          fontWeight: FontWeight.w700, fontSize: 14)),
+                  const SizedBox(height: 3),
+                  Text(subtitle,
+                      style: TextStyle(
+                          fontSize: 11, color: Colors.grey.shade500),
+                      maxLines: 2),
+                  const SizedBox(height: 6),
+                  Row(
+                    children: [
+                      Container(
+                        width: 7,
+                        height: 7,
+                        decoration: BoxDecoration(
+                          color: connected
+                              ? AppColors.success
+                              : Colors.grey.shade300,
+                          shape: BoxShape.circle,
+                        ),
+                      ),
+                      const SizedBox(width: 5),
+                      Text(
+                        statusLabel,
+                        style: TextStyle(
+                          fontSize: 11,
+                          color: connected
+                              ? AppColors.success
+                              : Colors.grey.shade400,
+                          fontWeight: FontWeight.w500,
+                        ),
+                      ),
+                    ],
+                  ),
+                ],
+              ),
+            ),
+            const SizedBox(width: 10),
+            // Connect / Manage button
+            ElevatedButton(
+              onPressed: connected ? onManage : onConnect,
+              style: ElevatedButton.styleFrom(
+                backgroundColor: connected
+                    ? AppColors.surface
+                    : AppColors.primaryMid,
+                foregroundColor:
+                    connected ? AppColors.primaryMid : Colors.white,
+                elevation: 0,
+                padding: const EdgeInsets.symmetric(
+                    horizontal: 16, vertical: 10),
+                shape: RoundedRectangleBorder(
+                    borderRadius: BorderRadius.circular(10)),
+                textStyle: const TextStyle(
+                    fontSize: 12, fontWeight: FontWeight.w600),
+              ),
+              child: Text(connected ? 'Manage' : 'Connect'),
             ),
           ],
         ),
@@ -201,67 +596,69 @@ class _StatCard extends StatelessWidget {
   }
 }
 
-class _QuickActionsRow extends StatelessWidget {
+class _StepItem extends StatelessWidget {
+  final String number;
+  final String text;
+  const _StepItem({required this.number, required this.text});
+
   @override
-  Widget build(BuildContext context) {
-    return Row(
-      children: [
-        Expanded(
-          child: _ActionButton(
-            icon: Icons.add_circle_outline,
-            label: 'Add Item',
-            onTap: () => context.push('/items/new'),
-          ),
+  Widget build(BuildContext context) => Padding(
+        padding: const EdgeInsets.only(bottom: 10),
+        child: Row(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Container(
+              width: 22,
+              height: 22,
+              decoration: BoxDecoration(
+                color: AppColors.primaryMid,
+                borderRadius: BorderRadius.circular(6),
+              ),
+              child: Center(
+                child: Text(number,
+                    style: const TextStyle(
+                        color: Colors.white,
+                        fontSize: 11,
+                        fontWeight: FontWeight.bold)),
+              ),
+            ),
+            const SizedBox(width: 10),
+            Expanded(
+              child: Text(text, style: const TextStyle(fontSize: 12)),
+            ),
+          ],
         ),
-        const SizedBox(width: 12),
-        Expanded(
-          child: _ActionButton(
-            icon: Icons.search,
-            label: 'Search',
-            onTap: () => context.push('/search'),
-          ),
-        ),
-        const SizedBox(width: 12),
-        Expanded(
-          child: _ActionButton(
-            icon: Icons.location_on_outlined,
-            label: 'Storage',
-            onTap: () => context.push('/storage'),
-          ),
-        ),
-      ],
-    );
-  }
+      );
 }
 
-class _ActionButton extends StatelessWidget {
-  final IconData icon;
-  final String label;
-  final VoidCallback onTap;
+class _EbayLogo extends StatelessWidget {
+  @override
+  Widget build(BuildContext context) => const Text(
+        'eBay',
+        style: TextStyle(
+          color: Colors.white,
+          fontWeight: FontWeight.w900,
+          fontSize: 14,
+          fontStyle: FontStyle.italic,
+        ),
+      );
+}
 
-  const _ActionButton({
-    required this.icon,
-    required this.label,
-    required this.onTap,
-  });
+class _WpLogo extends StatelessWidget {
+  @override
+  Widget build(BuildContext context) =>
+      const Icon(Icons.language, color: Colors.white, size: 22);
+}
+
+class _HeroSkeleton extends StatelessWidget {
+  const _HeroSkeleton();
 
   @override
-  Widget build(BuildContext context) {
-    return Card(
-      child: InkWell(
-        onTap: onTap,
-        borderRadius: BorderRadius.circular(12),
-        child: Padding(
-          padding: const EdgeInsets.symmetric(vertical: 16),
-          child: Column(
-            children: [
-              Icon(icon, color: AppColors.primary),
-              const SizedBox(height: 6),
-              Text(label, style: Theme.of(context).textTheme.labelSmall),
-            ],
-          ),
+  Widget build(BuildContext context) => Container(
+        height: 140,
+        decoration: BoxDecoration(
+          color: AppColors.primaryMid.withValues(alpha: 0.4),
+          borderRadius: BorderRadius.circular(20),
         ),
-      ),
-    );
-  }
+      );
 }

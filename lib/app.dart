@@ -85,6 +85,15 @@ final _routerProvider = Provider<GoRouter>((ref) {
             path: '/settings',
             builder: (_, _) => const SettingsScreen(),
           ),
+          GoRoute(
+            path: '/integrations/ebay',
+            builder: (_, _) => const _PlaceholderScreen('eBay Integration'),
+          ),
+          GoRoute(
+            path: '/integrations/wordpress',
+            builder: (_, _) =>
+                const _PlaceholderScreen('WordPress Integration'),
+          ),
         ],
       ),
     ],
@@ -101,7 +110,6 @@ class CoinVaultApp extends ConsumerWidget {
     return MaterialApp.router(
       title: 'Coin Vault',
       theme: AppTheme.light,
-      darkTheme: AppTheme.dark,
       routerConfig: router,
       debugShowCheckedModeBanner: false,
     );
@@ -132,25 +140,78 @@ class _AppShellState extends State<_AppShell> {
     final isWide = MediaQuery.of(context).size.width >= 600;
 
     if (isWide) {
-      // Sidebar navigation for macOS / tablets
       return Scaffold(
         body: Row(
           children: [
-            NavigationRail(
-              selectedIndex: _selectedIndex,
-              labelType: NavigationRailLabelType.all,
-              onDestinationSelected: (i) {
-                setState(() => _selectedIndex = i);
-                context.go(_destinations[i].route);
-              },
-              destinations: _destinations
-                  .map((d) => NavigationRailDestination(
-                        icon: Icon(d.icon),
-                        label: Text(d.label),
-                      ))
-                  .toList(),
+            // Dark futuristic sidebar
+            Container(
+              width: 72,
+              decoration: const BoxDecoration(
+                gradient: LinearGradient(
+                  begin: Alignment.topCenter,
+                  end: Alignment.bottomCenter,
+                  colors: [Color(0xFF0A0E27), Color(0xFF141B45)],
+                ),
+              ),
+              child: Column(
+                children: [
+                  const SizedBox(height: 16),
+                  // Logo
+                  Container(
+                    width: 40,
+                    height: 40,
+                    decoration: BoxDecoration(
+                      color: const Color(0xFFFFBB00).withValues(alpha: 0.15),
+                      borderRadius: BorderRadius.circular(12),
+                      border: Border.all(
+                          color: const Color(0xFFFFBB00).withValues(alpha: 0.3)),
+                    ),
+                    child: const Icon(Icons.monetization_on,
+                        color: Color(0xFFFFBB00), size: 22),
+                  ),
+                  const SizedBox(height: 24),
+                  const Divider(color: Colors.white10, height: 1),
+                  const SizedBox(height: 8),
+                  ..._destinations.asMap().entries.map((e) {
+                    final selected = _selectedIndex == e.key;
+                    return Tooltip(
+                      message: e.value.label,
+                      preferBelow: false,
+                      child: GestureDetector(
+                        onTap: () {
+                          setState(() => _selectedIndex = e.key);
+                          context.go(e.value.route);
+                        },
+                        child: AnimatedContainer(
+                          duration: const Duration(milliseconds: 200),
+                          width: 52,
+                          height: 52,
+                          margin: const EdgeInsets.symmetric(vertical: 2),
+                          decoration: BoxDecoration(
+                            color: selected
+                                ? const Color(0xFFFFBB00).withValues(alpha: 0.15)
+                                : Colors.transparent,
+                            borderRadius: BorderRadius.circular(14),
+                            border: selected
+                                ? Border.all(
+                                    color: const Color(0xFFFFBB00)
+                                        .withValues(alpha: 0.4))
+                                : null,
+                          ),
+                          child: Icon(
+                            e.value.icon,
+                            color: selected
+                                ? const Color(0xFFFFBB00)
+                                : Colors.white.withValues(alpha: 0.4),
+                            size: 22,
+                          ),
+                        ),
+                      ),
+                    );
+                  }),
+                ],
+              ),
             ),
-            const VerticalDivider(width: 1),
             Expanded(child: widget.child),
           ],
         ),
