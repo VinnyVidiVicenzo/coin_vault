@@ -52,7 +52,7 @@ class _ItemDetailViewState extends ConsumerState<_ItemDetailView>
   @override
   void initState() {
     super.initState();
-    _tabs = TabController(length: 5, vsync: this);
+    _tabs = TabController(length: 7, vsync: this);
   }
 
   @override
@@ -104,6 +104,8 @@ class _ItemDetailViewState extends ConsumerState<_ItemDetailView>
             Tab(text: 'Condition'),
             Tab(text: 'Catalog Refs'),
             Tab(text: 'Notes'),
+            Tab(text: 'Valuation'),
+            Tab(text: 'eBay'),
           ],
         ),
       ),
@@ -115,6 +117,16 @@ class _ItemDetailViewState extends ConsumerState<_ItemDetailView>
           _ConditionTab(item: item),
           _CatalogRefsTab(item: item),
           _NotesTab(item: item),
+          _QuickLinkTab(
+            icon: Icons.show_chart,
+            label: 'View valuation history & chart',
+            onTap: () => context.push('/items/${item.id}/valuation'),
+          ),
+          _QuickLinkTab(
+            icon: Icons.sell_outlined,
+            label: 'View eBay listings',
+            onTap: () => context.push('/items/${item.id}/ebay'),
+          ),
         ],
       ),
     );
@@ -450,6 +462,25 @@ class _NotesTab extends StatelessWidget {
       ],
     );
   }
+}
+
+// ── Quick-link tab (navigates to sub-screen) ───────────────────────
+
+class _QuickLinkTab extends StatelessWidget {
+  final IconData icon;
+  final String label;
+  final VoidCallback onTap;
+  const _QuickLinkTab(
+      {required this.icon, required this.label, required this.onTap});
+
+  @override
+  Widget build(BuildContext context) => Center(
+        child: FilledButton.icon(
+          icon: Icon(icon),
+          label: Text(label),
+          onPressed: onTap,
+        ),
+      );
 }
 
 // ── Shared widgets ─────────────────────────────────────────────────

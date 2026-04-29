@@ -8,6 +8,9 @@ import 'presentation/screens/items/item_list_screen.dart';
 import 'presentation/screens/items/item_detail_screen.dart';
 import 'presentation/screens/items/item_form_screen.dart';
 import 'presentation/screens/settings/settings_screen.dart';
+import 'presentation/screens/valuation/add_valuation_screen.dart';
+import 'presentation/screens/valuation/valuation_history_screen.dart';
+import 'presentation/screens/ebay/ebay_listing_screen.dart';
 import 'core/theme/app_theme.dart';
 
 final _routerProvider = Provider<GoRouter>((ref) {
@@ -50,6 +53,23 @@ final _routerProvider = Provider<GoRouter>((ref) {
                 builder: (_, state) => ItemFormScreen(
                   itemId: state.pathParameters['id'],
                 ),
+              ),
+              GoRoute(
+                path: 'valuation',
+                builder: (_, state) => ValuationHistoryScreen(
+                    itemId: state.pathParameters['id']!),
+                routes: [
+                  GoRoute(
+                    path: 'add',
+                    builder: (_, state) => AddValuationScreen(
+                        itemId: state.pathParameters['id']!),
+                  ),
+                ],
+              ),
+              GoRoute(
+                path: 'ebay',
+                builder: (_, state) => EbayListingScreen(
+                    itemId: state.pathParameters['id']!),
               ),
             ],
           ),

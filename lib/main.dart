@@ -12,8 +12,9 @@ import 'app.dart';
 //    (found in: Project Settings → API)
 // ──────────────────────────────────────────────────────────────
 
-const _supabaseUrl = 'https://YOUR_PROJECT_ID.supabase.co';
-const _supabaseAnonKey = 'YOUR_ANON_KEY';
+const _supabaseUrl = 'https://rebjxvgbitpguaftaamq.supabase.co';
+const _supabaseAnonKey =
+    'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InJlYmp4dmdiaXRwZ3VhZnRhYW1xIiwicm9sZSI6ImFub24iLCJpYXQiOjE3Nzc0MzA0MDksImV4cCI6MjA5MzAwNjQwOX0.F2ZVV0hmrgt5m0aqYf8fFeaaP6ZC4Tpy7tkMzU3Y9Gg';
 
 Future<void> main() async {
   WidgetsFlutterBinding.ensureInitialized();
