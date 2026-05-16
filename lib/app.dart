@@ -12,6 +12,7 @@ import 'presentation/screens/valuation/add_valuation_screen.dart';
 import 'presentation/screens/valuation/valuation_history_screen.dart';
 import 'presentation/screens/ebay/ebay_listing_screen.dart';
 import 'presentation/screens/storage/storage_screen.dart';
+import 'presentation/screens/search/search_screen.dart';
 import 'core/theme/app_theme.dart';
 
 final _routerProvider = Provider<GoRouter>((ref) {
@@ -76,7 +77,7 @@ final _routerProvider = Provider<GoRouter>((ref) {
           ),
           GoRoute(
             path: '/search',
-            builder: (_, _) => const _PlaceholderScreen('Search & Filter'),
+            builder: (_, _) => const SearchScreen(),
           ),
           GoRoute(
             path: '/storage',
