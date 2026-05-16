@@ -4,8 +4,11 @@ import 'package:go_router/go_router.dart';
 import 'package:cached_network_image/cached_network_image.dart';
 import 'package:photo_view/photo_view.dart';
 import 'package:photo_view/photo_view_gallery.dart';
+import 'package:intl/intl.dart';
 import '../../../data/models/item.dart';
+import '../../../data/models/storage_location.dart';
 import '../../providers/items/items_provider.dart';
+import '../../providers/storage/storage_provider.dart';
 import '../../../core/theme/app_colors.dart';
 import '../../../core/utils/grade_utils.dart';
 
@@ -52,7 +55,7 @@ class _ItemDetailViewState extends ConsumerState<_ItemDetailView>
   @override
   void initState() {
     super.initState();
-    _tabs = TabController(length: 7, vsync: this);
+    _tabs = TabController(length: 8, vsync: this);
   }
 
   @override
@@ -106,6 +109,7 @@ class _ItemDetailViewState extends ConsumerState<_ItemDetailView>
             Tab(text: 'Notes'),
             Tab(text: 'Valuation'),
             Tab(text: 'eBay'),
+            Tab(text: 'Storage'),
           ],
         ),
       ),
@@ -127,6 +131,7 @@ class _ItemDetailViewState extends ConsumerState<_ItemDetailView>
             label: 'View eBay listings',
             onTap: () => context.push('/items/${item.id}/ebay'),
           ),
+          _StorageTab(item: item),
         ],
       ),
     );
@@ -533,4 +538,459 @@ class _Row {
   final String label;
   final String? value;
   const _Row(this.label, this.value);
+}
+
+// ── Storage tab ─────────────────────────────────────────────────────
+
+class _StorageTab extends ConsumerWidget {
+  final Item item;
+  const _StorageTab({required this.item});
+
+  @override
+  Widget build(BuildContext context, WidgetRef ref) {
+    final storageAsync = ref.watch(itemStorageProvider(item.id));
+
+    return storageAsync.when(
+      loading: () => const Center(child: CircularProgressIndicator()),
+      error: (e, _) => Center(child: Text('Error: $e')),
+      data: (storage) => storage == null
+          ? _StorageEmptyState(item: item)
+          : _StorageDetails(item: item, storage: storage),
+    );
+  }
+}
+
+class _StorageEmptyState extends ConsumerWidget {
+  final Item item;
+  const _StorageEmptyState({required this.item});
+
+  @override
+  Widget build(BuildContext context, WidgetRef ref) {
+    return Center(
+      child: Column(
+        mainAxisAlignment: MainAxisAlignment.center,
+        children: [
+          const Icon(Icons.inventory_2_outlined,
+              size: 64, color: Colors.grey),
+          const SizedBox(height: 16),
+          const Text('Not yet stored'),
+          const SizedBox(height: 16),
+          FilledButton.icon(
+            icon: const Icon(Icons.add_location_outlined),
+            label: const Text('Assign to storage'),
+            onPressed: () => _showAssignSheet(context, ref, null),
+          ),
+        ],
+      ),
+    );
+  }
+
+  void _showAssignSheet(
+      BuildContext context, WidgetRef ref, ItemStorage? existing) {
+    showModalBottomSheet(
+      context: context,
+      isScrollControlled: true,
+      builder: (_) => _AssignStorageSheet(item: item, existing: existing),
+    ).then((_) => ref.invalidate(itemStorageProvider(item.id)));
+  }
+}
+
+class _StorageDetails extends ConsumerWidget {
+  final Item item;
+  final ItemStorage storage;
+  const _StorageDetails({required this.item, required this.storage});
+
+  @override
+  Widget build(BuildContext context, WidgetRef ref) {
+    return ListView(
+      padding: const EdgeInsets.all(16),
+      children: [
+        // Location chip
+        if (storage.location != null)
+          Container(
+            padding:
+                const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+            decoration: BoxDecoration(
+              color: AppColors.primary.withValues(alpha: 0.08),
+              borderRadius: BorderRadius.circular(10),
+              border: Border.all(
+                  color: AppColors.primary.withValues(alpha: 0.2)),
+            ),
+            child: Row(
+              children: [
+                const Icon(Icons.home_outlined,
+                    size: 18, color: AppColors.primary),
+                const SizedBox(width: 8),
+                Text(storage.location!.locationName,
+                    style: const TextStyle(
+                        fontWeight: FontWeight.w600,
+                        color: AppColors.primary)),
+              ],
+            ),
+          ),
+        const SizedBox(height: 16),
+
+        _DetailSection(title: 'Container', rows: [
+          _Row('Box / container',
+              storage.containerLabel ?? storage.containerType),
+          _Row('Container type',
+              storage.containerType?.replaceAll('_', ' ')),
+          _Row('Slot / position', storage.slotEnvelopeNumber),
+          _Row('Holder type',
+              storage.holderType?.replaceAll('_', ' ')),
+        ]),
+
+        if (storage.notes != null && storage.notes!.isNotEmpty)
+          _DetailSection(title: 'Label / sticker text', rows: [
+            _Row('Label', storage.notes),
+          ]),
+
+        _DetailSection(title: 'Status', rows: [
+          _Row(
+              'Last verified',
+              storage.lastVerifiedDate != null
+                  ? DateFormat('MMM d, yyyy')
+                      .format(storage.lastVerifiedDate!)
+                  : null),
+          _Row('Environment notes', storage.environmentNotes),
+        ]),
+
+        const SizedBox(height: 8),
+        Row(
+          children: [
+            Expanded(
+              child: OutlinedButton.icon(
+                icon: const Icon(Icons.edit_outlined),
+                label: const Text('Edit assignment'),
+                onPressed: () =>
+                    _showAssignSheet(context, ref, storage),
+              ),
+            ),
+            const SizedBox(width: 12),
+            OutlinedButton(
+              style: OutlinedButton.styleFrom(
+                  foregroundColor: AppColors.error),
+              onPressed: () => _confirmRemove(context, ref),
+              child: const Icon(Icons.delete_outline),
+            ),
+          ],
+        ),
+      ],
+    );
+  }
+
+  void _showAssignSheet(
+      BuildContext context, WidgetRef ref, ItemStorage? existing) {
+    showModalBottomSheet(
+      context: context,
+      isScrollControlled: true,
+      builder: (_) => _AssignStorageSheet(item: item, existing: existing),
+    ).then((_) => ref.invalidate(itemStorageProvider(item.id)));
+  }
+
+  Future<void> _confirmRemove(BuildContext context, WidgetRef ref) async {
+    final ok = await showDialog<bool>(
+          context: context,
+          builder: (_) => AlertDialog(
+            title: const Text('Remove storage assignment?'),
+            content: const Text(
+                'The coin stays in your collection — this just removes the location record.'),
+            actions: [
+              TextButton(
+                  onPressed: () => Navigator.pop(context, false),
+                  child: const Text('Cancel')),
+              FilledButton(
+                style: FilledButton.styleFrom(
+                    backgroundColor: AppColors.error),
+                onPressed: () => Navigator.pop(context, true),
+                child: const Text('Remove'),
+              ),
+            ],
+          ),
+        ) ??
+        false;
+    if (ok) {
+      await ref
+          .read(storageRepositoryProvider)
+          .delete(item.id);
+      ref.invalidate(itemStorageProvider(item.id));
+    }
+  }
+}
+
+// ── Assign storage sheet ─────────────────────────────────────────────
+
+class _AssignStorageSheet extends ConsumerStatefulWidget {
+  final Item item;
+  final ItemStorage? existing;
+  const _AssignStorageSheet({required this.item, this.existing});
+
+  @override
+  ConsumerState<_AssignStorageSheet> createState() =>
+      _AssignStorageSheetState();
+}
+
+class _AssignStorageSheetState
+    extends ConsumerState<_AssignStorageSheet> {
+  String _containerType = 'slab_box';
+  final _containerLabelCtrl = TextEditingController();
+  final _slotCtrl = TextEditingController();
+  String _holderType = 'slab';
+  final _flipLabelCtrl = TextEditingController();
+  final _envNotesCtrl = TextEditingController();
+  DateTime? _lastVerified;
+  bool _saving = false;
+
+  @override
+  void initState() {
+    super.initState();
+    final e = widget.existing;
+    if (e != null) {
+      _containerType = e.containerType ?? 'slab_box';
+      _containerLabelCtrl.text = e.containerLabel ?? '';
+      _slotCtrl.text = e.slotEnvelopeNumber ?? '';
+      _holderType = e.holderType ?? 'slab';
+      _flipLabelCtrl.text = e.notes ?? '';
+      _envNotesCtrl.text = e.environmentNotes ?? '';
+      _lastVerified = e.lastVerifiedDate;
+    } else {
+      // Pre-fill holder type from item's is_slabbed flag
+      _holderType = widget.item.isSlabbed ? 'slab' : '2x2_flip';
+      _containerType = widget.item.isSlabbed ? 'slab_box' : 'flip_box';
+    }
+  }
+
+  @override
+  void dispose() {
+    _containerLabelCtrl.dispose();
+    _slotCtrl.dispose();
+    _flipLabelCtrl.dispose();
+    _envNotesCtrl.dispose();
+    super.dispose();
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final locationsAsync = ref.watch(storageLocationsProvider);
+
+    return Padding(
+      padding: EdgeInsets.fromLTRB(
+          16, 16, 16, MediaQuery.of(context).viewInsets.bottom + 24),
+      child: SingleChildScrollView(
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          crossAxisAlignment: CrossAxisAlignment.stretch,
+          children: [
+            Row(
+              children: [
+                Text(
+                  widget.existing != null
+                      ? 'Edit storage'
+                      : 'Assign to storage',
+                  style: Theme.of(context).textTheme.titleMedium,
+                ),
+                const Spacer(),
+                if (_saving)
+                  const SizedBox(
+                      width: 20,
+                      height: 20,
+                      child: CircularProgressIndicator(strokeWidth: 2))
+                else
+                  FilledButton(
+                      onPressed: () => _save(locationsAsync.valueOrNull),
+                      child: const Text('Save')),
+              ],
+            ),
+            const SizedBox(height: 20),
+
+            // Container type + label
+            Row(
+              children: [
+                Expanded(
+                  child: DropdownButtonFormField<String>(
+                    value: _containerType,
+                    decoration:
+                        const InputDecoration(labelText: 'Container type', isDense: true),
+                    items: const [
+                      DropdownMenuItem(
+                          value: 'slab_box', child: Text('Slab box')),
+                      DropdownMenuItem(
+                          value: 'flip_box', child: Text('Flip box')),
+                      DropdownMenuItem(
+                          value: 'display', child: Text('Display case')),
+                      DropdownMenuItem(
+                          value: 'album', child: Text('Album')),
+                      DropdownMenuItem(
+                          value: 'other', child: Text('Other')),
+                    ],
+                    onChanged: (v) => setState(() {
+                      _containerType = v ?? 'slab_box';
+                      // Auto-switch holder type with container type
+                      if (v == 'slab_box') _holderType = 'slab';
+                      if (v == 'flip_box') _holderType = '2x2_flip';
+                      if (v == 'album') _holderType = 'album_page';
+                    }),
+                  ),
+                ),
+                const SizedBox(width: 12),
+                Expanded(
+                  child: TextFormField(
+                    controller: _containerLabelCtrl,
+                    decoration: const InputDecoration(
+                        labelText: 'Box / container name',
+                        hintText: 'e.g. Slab Box 1',
+                        isDense: true),
+                  ),
+                ),
+              ],
+            ),
+            const SizedBox(height: 12),
+
+            // Slot + holder type
+            Row(
+              children: [
+                Expanded(
+                  child: TextFormField(
+                    controller: _slotCtrl,
+                    decoration: const InputDecoration(
+                        labelText: 'Slot / position',
+                        hintText: 'e.g. Row 2, Slot 4',
+                        isDense: true),
+                  ),
+                ),
+                const SizedBox(width: 12),
+                Expanded(
+                  child: DropdownButtonFormField<String>(
+                    value: _holderType,
+                    decoration: const InputDecoration(
+                        labelText: 'Holder type', isDense: true),
+                    items: const [
+                      DropdownMenuItem(
+                          value: 'slab', child: Text('Slab')),
+                      DropdownMenuItem(
+                          value: '2x2_flip',
+                          child: Text('2×2 flip')),
+                      DropdownMenuItem(
+                          value: 'capsule', child: Text('Capsule')),
+                      DropdownMenuItem(
+                          value: 'album_page',
+                          child: Text('Album page')),
+                      DropdownMenuItem(
+                          value: 'currency_sleeve',
+                          child: Text('Currency sleeve')),
+                      DropdownMenuItem(
+                          value: 'raw', child: Text('Raw / loose')),
+                    ],
+                    onChanged: (v) =>
+                        setState(() => _holderType = v ?? '2x2_flip'),
+                  ),
+                ),
+              ],
+            ),
+            const SizedBox(height: 12),
+
+            // Flip label (what's written/stickered on the flip)
+            TextFormField(
+              controller: _flipLabelCtrl,
+              decoration: const InputDecoration(
+                labelText: 'Label / sticker text on flip',
+                hintText: 'e.g. "1881-S MS65" or "raw circulated"',
+                isDense: true,
+              ),
+            ),
+            const SizedBox(height: 12),
+
+            // Last verified date
+            GestureDetector(
+              onTap: () async {
+                final picked = await showDatePicker(
+                  context: context,
+                  initialDate: _lastVerified ?? DateTime.now(),
+                  firstDate: DateTime(2000),
+                  lastDate: DateTime.now(),
+                );
+                if (picked != null) {
+                  setState(() => _lastVerified = picked);
+                }
+              },
+              child: InputDecorator(
+                decoration: const InputDecoration(
+                  labelText: 'Last verified date',
+                  suffixIcon:
+                      Icon(Icons.calendar_today_outlined, size: 16),
+                  isDense: true,
+                ),
+                child: Text(
+                  _lastVerified != null
+                      ? DateFormat('MMM d, yyyy').format(_lastVerified!)
+                      : 'Tap to set (optional)',
+                  style: TextStyle(
+                    color:
+                        _lastVerified != null ? null : Colors.grey,
+                    fontSize: 14,
+                  ),
+                ),
+              ),
+            ),
+            const SizedBox(height: 12),
+
+            TextFormField(
+              controller: _envNotesCtrl,
+              decoration: const InputDecoration(
+                labelText: 'Environment notes (optional)',
+                hintText: 'e.g. "with silica packet"',
+                isDense: true,
+              ),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+
+  Future<void> _save(List<StorageLocation>? locations) async {
+    if (locations == null || locations.isEmpty) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          content: Text(
+              'Set up a storage location first (go to Storage tab).'),
+        ),
+      );
+      return;
+    }
+
+    setState(() => _saving = true);
+    try {
+      final location = locations.first;
+      await ref.read(storageRepositoryProvider).upsert(
+            ItemStorage(
+              itemId: widget.item.id,
+              storageLocationId: location.id!,
+              containerType: _containerType,
+              containerLabel: _containerLabelCtrl.text.isEmpty
+                  ? null
+                  : _containerLabelCtrl.text,
+              slotEnvelopeNumber:
+                  _slotCtrl.text.isEmpty ? null : _slotCtrl.text,
+              holderType: _holderType,
+              notes: _flipLabelCtrl.text.isEmpty
+                  ? null
+                  : _flipLabelCtrl.text,
+              environmentNotes: _envNotesCtrl.text.isEmpty
+                  ? null
+                  : _envNotesCtrl.text,
+              lastVerifiedDate: _lastVerified,
+            ),
+          );
+      if (mounted) Navigator.pop(context);
+    } catch (e) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text('Error: $e')),
+        );
+      }
+    } finally {
+      if (mounted) setState(() => _saving = false);
+    }
+  }
 }

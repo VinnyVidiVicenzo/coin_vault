@@ -52,12 +52,19 @@ class ValuationRepository {
         .eq('id', valuationId);
   }
 
-  // For dashboard: sum of latest valuation per item
+  // For dashboard: sum of latest valuation per item via current_valuations view
   Future<double> totalCollectionValue() async {
-    final userId = supabase.auth.currentUser!.id;
-    final data = await supabase
-        .rpc('current_valuations_sum', params: {'p_owner': userId})
-        .maybeSingle();
-    return (data as num?)?.toDouble() ?? 0.0;
+    try {
+      final data = await supabase
+          .from('current_valuations')
+          .select('estimated_value') as List;
+      return data.fold<double>(
+        0.0,
+        (sum, row) =>
+            sum + ((row['estimated_value'] as num?)?.toDouble() ?? 0.0),
+      );
+    } catch (_) {
+      return 0.0;
+    }
   }
 }

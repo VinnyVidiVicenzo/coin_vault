@@ -2,8 +2,10 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 import '../../providers/items/items_provider.dart';
+import '../../providers/dashboard/dashboard_provider.dart';
 import '../../widgets/common/gradient_card.dart';
 import '../../../core/theme/app_colors.dart';
+import '../../../core/utils/currency_formatter.dart';
 
 class DashboardScreen extends ConsumerWidget {
   const DashboardScreen({super.key});
@@ -11,6 +13,7 @@ class DashboardScreen extends ConsumerWidget {
   @override
   Widget build(BuildContext context, WidgetRef ref) {
     final items = ref.watch(itemsListProvider);
+    final statsAsync = ref.watch(dashboardStatsProvider);
 
     return Scaffold(
       backgroundColor: AppColors.surface,
@@ -137,6 +140,23 @@ class DashboardScreen extends ConsumerWidget {
                   ),
                 );
               },
+            ),
+
+            const SizedBox(height: 16),
+
+            // ── Financial overview ───────────────────────────
+            statsAsync.when(
+              loading: () => Container(
+                height: 90,
+                decoration: BoxDecoration(
+                  color: Colors.grey.shade100,
+                  borderRadius: BorderRadius.circular(18),
+                ),
+              ),
+              error: (_, __) => const SizedBox.shrink(),
+              data: (stats) => stats.hasFinancialData
+                  ? _FinancialCard(stats: stats)
+                  : const SizedBox.shrink(),
             ),
 
             const SizedBox(height: 20),
@@ -660,5 +680,158 @@ class _HeroSkeleton extends StatelessWidget {
           color: AppColors.primaryMid.withValues(alpha: 0.4),
           borderRadius: BorderRadius.circular(20),
         ),
+      );
+}
+
+class _FinancialCard extends StatelessWidget {
+  final DashboardStats stats;
+  const _FinancialCard({required this.stats});
+
+  @override
+  Widget build(BuildContext context) {
+    final isGain = stats.gain >= 0;
+    final gainColor = isGain ? AppColors.success : AppColors.error;
+
+    return Container(
+      padding: const EdgeInsets.all(16),
+      decoration: BoxDecoration(
+        color: Colors.white,
+        borderRadius: BorderRadius.circular(18),
+        border: Border.all(color: Colors.grey.shade100),
+        boxShadow: [
+          BoxShadow(
+            color: Colors.black.withValues(alpha: 0.04),
+            blurRadius: 10,
+            offset: const Offset(0, 4),
+          ),
+        ],
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Row(
+            children: [
+              const Icon(Icons.account_balance_wallet_outlined,
+                  size: 16, color: AppColors.primary),
+              const SizedBox(width: 6),
+              Text(
+                'Financial Overview',
+                style: TextStyle(
+                  fontSize: 12,
+                  fontWeight: FontWeight.w700,
+                  color: AppColors.primary,
+                  letterSpacing: 0.3,
+                ),
+              ),
+              const Spacer(),
+              if (stats.activeListings > 0)
+                Container(
+                  padding: const EdgeInsets.symmetric(
+                      horizontal: 8, vertical: 3),
+                  decoration: BoxDecoration(
+                    color: AppColors.success.withValues(alpha: 0.1),
+                    borderRadius: BorderRadius.circular(20),
+                    border: Border.all(
+                        color: AppColors.success.withValues(alpha: 0.3)),
+                  ),
+                  child: Text(
+                    '${stats.activeListings} on eBay',
+                    style: const TextStyle(
+                      color: AppColors.success,
+                      fontSize: 10,
+                      fontWeight: FontWeight.bold,
+                    ),
+                  ),
+                ),
+            ],
+          ),
+          const SizedBox(height: 14),
+          Row(
+            children: [
+              _FinStat(
+                label: 'COST BASIS',
+                value: CurrencyFormatter.format(stats.totalCost),
+                color: Colors.grey.shade700,
+              ),
+              _FinDivider(),
+              _FinStat(
+                label: 'EST. VALUE',
+                value: stats.currentValue > 0
+                    ? CurrencyFormatter.format(stats.currentValue)
+                    : '—',
+                color: AppColors.primary,
+              ),
+              if (stats.totalCost > 0 && stats.currentValue > 0) ...[
+                _FinDivider(),
+                _FinStat(
+                  label: 'GAIN / LOSS',
+                  value:
+                      '${isGain ? '+' : ''}${CurrencyFormatter.format(stats.gain)}\n'
+                      '${isGain ? '+' : ''}${stats.gainPct.toStringAsFixed(1)}%',
+                  color: gainColor,
+                ),
+              ],
+            ],
+          ),
+          if (stats.activeListings > 0 && stats.totalListedValue > 0) ...[
+            const SizedBox(height: 10),
+            Divider(height: 1, color: Colors.grey.shade100),
+            const SizedBox(height: 10),
+            Row(
+              children: [
+                const Icon(Icons.sell_outlined,
+                    size: 14, color: AppColors.success),
+                const SizedBox(width: 6),
+                Text(
+                  '${stats.activeListings} active listing${stats.activeListings == 1 ? '' : 's'} · '
+                  '${CurrencyFormatter.format(stats.totalListedValue)} listed',
+                  style: TextStyle(
+                      fontSize: 12, color: Colors.grey.shade600),
+                ),
+              ],
+            ),
+          ],
+        ],
+      ),
+    );
+  }
+}
+
+class _FinStat extends StatelessWidget {
+  final String label;
+  final String value;
+  final Color color;
+  const _FinStat(
+      {required this.label, required this.value, required this.color});
+
+  @override
+  Widget build(BuildContext context) => Expanded(
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Text(label,
+                style: TextStyle(
+                    fontSize: 9,
+                    fontWeight: FontWeight.w600,
+                    color: Colors.grey.shade400,
+                    letterSpacing: 0.8)),
+            const SizedBox(height: 3),
+            Text(value,
+                style: TextStyle(
+                    fontSize: 14,
+                    fontWeight: FontWeight.bold,
+                    color: color)),
+          ],
+        ),
+      );
+}
+
+class _FinDivider extends StatelessWidget {
+  @override
+  Widget build(BuildContext context) => Container(
+        width: 1,
+        height: 36,
+        color: Colors.grey.shade100,
+        margin: const EdgeInsets.symmetric(horizontal: 12),
       );
 }

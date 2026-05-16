@@ -3,11 +3,15 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 import 'package:image_picker/image_picker.dart';
+import 'package:intl/intl.dart';
 import '../../../data/models/item.dart';
+import '../../../data/models/acquisition.dart';
 import '../../../data/models/catalog_reference.dart';
 import '../../../data/models/item_image.dart';
 import '../../../data/remote/supabase/storage_service.dart';
+import '../../../data/repositories/impl/acquisition_repository_impl.dart';
 import '../../providers/items/items_provider.dart';
+import '../../providers/acquisition/acquisition_provider.dart';
 import '../../widgets/forms/catalog_ref_form.dart';
 import '../../../core/constants/db_constants.dart';
 import '../../../core/theme/app_colors.dart';
@@ -100,18 +104,96 @@ class _ItemFormScreenState extends ConsumerState<ItemFormScreen> {
   final List<_PendingImage> _pendingImages = [];
   String? _existingItemId;
 
+  // Acquisition
+  DateTime? _purchaseDate;
+  String? _sourceType;
+  String _costBasisType = 'known';
+  String? _paymentMethod;
+  final _sellerNameCtrl = TextEditingController();
+  final _sellerContactCtrl = TextEditingController();
+  final _lotNumberCtrl = TextEditingController();
+  final _purchasePriceCtrl = TextEditingController();
+  final _buyersPremiumCtrl = TextEditingController();
+  final _shippingCostCtrl = TextEditingController();
+  final _taxPaidCtrl = TextEditingController();
+  final _otherFeesCtrl = TextEditingController();
+  final _acqNotesCtrl = TextEditingController();
+
   @override
   void initState() {
     super.initState();
+    for (final ctrl in [
+      _purchasePriceCtrl,
+      _buyersPremiumCtrl,
+      _shippingCostCtrl,
+      _taxPaidCtrl,
+      _otherFeesCtrl,
+    ]) {
+      ctrl.addListener(_rebuildForTotal);
+    }
     _loadExisting();
+  }
+
+  void _rebuildForTotal() {
+    if (mounted) setState(() {});
+  }
+
+  @override
+  void dispose() {
+    for (final ctrl in [
+      _countryCtrl, _issuingCtrl, _denomCtrl, _denomNumCtrl,
+      _yearStartCtrl, _yearEndCtrl, _mintMarkCtrl, _seriesCtrl, _varietyCtrl,
+      _metalCtrl, _weightCtrl, _diameterCtrl,
+      _noteWidthCtrl, _noteHeightCtrl,
+      _obverseCtrl, _reverseCtrl, _edgeDescCtrl, _dieMarkersCtrl,
+      _serialCtrl, _serialBlockCtrl, _sigCombCtrl, _sealColorCtrl,
+      _districtCtrl, _plateFrontCtrl, _plateBackCtrl,
+      _gradeCtrl, _gradeNumCtrl, _certCtrl, _detailsNoteCtrl,
+      _holderGenCtrl, _popObverseCtrl, _popReverseCtrl, _certUrlCtrl,
+      _quantityCtrl, _dupCountCtrl,
+      _historicalCtrl, _attributionCtrl, _provenanceCtrl, _internalCtrl,
+      _sellerNameCtrl, _sellerContactCtrl, _lotNumberCtrl,
+      _purchasePriceCtrl, _buyersPremiumCtrl, _shippingCostCtrl,
+      _taxPaidCtrl, _otherFeesCtrl, _acqNotesCtrl,
+    ]) {
+      ctrl.dispose();
+    }
+    super.dispose();
   }
 
   Future<void> _loadExisting() async {
     if (widget.itemId != null && widget.itemId != 'new') {
-      final item = await ref.read(itemRepositoryProvider).fetchItem(widget.itemId!);
-      if (item != null && mounted) _populateForm(item);
+      final itemFuture =
+          ref.read(itemRepositoryProvider).fetchItem(widget.itemId!);
+      final acqFuture = ref
+          .read(acquisitionRepositoryProvider)
+          .fetchForItem(widget.itemId!);
+
+      final item = await itemFuture;
+      final acq = await acqFuture;
+
+      if (mounted) {
+        if (item != null) _populateForm(item);
+        if (acq != null) _populateAcquisition(acq);
+      }
     }
     if (mounted) setState(() => _loading = false);
+  }
+
+  void _populateAcquisition(Acquisition acq) {
+    _purchaseDate = acq.purchaseDate;
+    _sourceType = acq.sourceType;
+    _costBasisType = acq.costBasisType;
+    _paymentMethod = acq.paymentMethod;
+    _sellerNameCtrl.text = acq.sellerName ?? '';
+    _sellerContactCtrl.text = acq.sellerContact ?? '';
+    _lotNumberCtrl.text = acq.lotNumber ?? '';
+    _purchasePriceCtrl.text = acq.purchasePrice?.toString() ?? '';
+    _buyersPremiumCtrl.text = acq.buyersPremium?.toString() ?? '';
+    _shippingCostCtrl.text = acq.shippingCost?.toString() ?? '';
+    _taxPaidCtrl.text = acq.taxPaid?.toString() ?? '';
+    _otherFeesCtrl.text = acq.otherFees?.toString() ?? '';
+    _acqNotesCtrl.text = acq.notes ?? '';
   }
 
   void _populateForm(Item item) {
@@ -260,6 +342,38 @@ class _ItemFormScreenState extends ConsumerState<ItemFormScreen> {
         ));
       }
 
+      // Save acquisition if any cost data has been entered
+      final hasAcqData = _purchaseDate != null ||
+          _sourceType != null ||
+          _purchasePriceCtrl.text.isNotEmpty;
+      if (hasAcqData) {
+        await ref.read(acquisitionRepositoryProvider).upsert(
+              Acquisition(
+                itemId: saved.id,
+                purchaseDate: _purchaseDate,
+                sourceType: _sourceType,
+                sellerName: _sellerNameCtrl.text.isEmpty
+                    ? null
+                    : _sellerNameCtrl.text,
+                sellerContact: _sellerContactCtrl.text.isEmpty
+                    ? null
+                    : _sellerContactCtrl.text,
+                lotNumber: _lotNumberCtrl.text.isEmpty
+                    ? null
+                    : _lotNumberCtrl.text,
+                purchasePrice: double.tryParse(_purchasePriceCtrl.text),
+                buyersPremium: double.tryParse(_buyersPremiumCtrl.text),
+                shippingCost: double.tryParse(_shippingCostCtrl.text),
+                taxPaid: double.tryParse(_taxPaidCtrl.text),
+                otherFees: double.tryParse(_otherFeesCtrl.text),
+                paymentMethod: _paymentMethod,
+                costBasisType: _costBasisType,
+                notes:
+                    _acqNotesCtrl.text.isEmpty ? null : _acqNotesCtrl.text,
+              ),
+            );
+      }
+
       ref.read(itemsListProvider.notifier).refresh();
 
       if (mounted) {
@@ -369,6 +483,10 @@ class _ItemFormScreenState extends ConsumerState<ItemFormScreen> {
 
             _sectionHeader('Notes & Research'),
             _notesFields(),
+            const SizedBox(height: 16),
+
+            _sectionHeader('Acquisition'),
+            _acquisitionFields(),
             const SizedBox(height: 16),
 
             _sectionHeader('Visibility'),
@@ -738,18 +856,225 @@ class _ItemFormScreenState extends ConsumerState<ItemFormScreen> {
         ],
       );
 
+  Widget _acquisitionFields() {
+    final computed = (double.tryParse(_purchasePriceCtrl.text) ?? 0) +
+        (double.tryParse(_buyersPremiumCtrl.text) ?? 0) +
+        (double.tryParse(_shippingCostCtrl.text) ?? 0) +
+        (double.tryParse(_taxPaidCtrl.text) ?? 0) +
+        (double.tryParse(_otherFeesCtrl.text) ?? 0);
+
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        // Date + source
+        Row(
+          children: [
+            Expanded(
+              child: GestureDetector(
+                onTap: () async {
+                  final picked = await showDatePicker(
+                    context: context,
+                    initialDate: _purchaseDate ?? DateTime.now(),
+                    firstDate: DateTime(1800),
+                    lastDate: DateTime.now(),
+                  );
+                  if (picked != null) setState(() => _purchaseDate = picked);
+                },
+                child: InputDecorator(
+                  decoration: const InputDecoration(
+                    labelText: 'Purchase date',
+                    suffixIcon: Icon(Icons.calendar_today_outlined, size: 18),
+                  ),
+                  child: Text(
+                    _purchaseDate != null
+                        ? DateFormat('MMM d, yyyy').format(_purchaseDate!)
+                        : 'Tap to select',
+                    style: TextStyle(
+                      color: _purchaseDate != null ? null : Colors.grey,
+                    ),
+                  ),
+                ),
+              ),
+            ),
+            const SizedBox(width: 12),
+            Expanded(
+              child: DropdownButtonFormField<String>(
+                value: _sourceType,
+                decoration: const InputDecoration(labelText: 'Source'),
+                items: const [
+                  DropdownMenuItem(value: 'dealer', child: Text('Dealer')),
+                  DropdownMenuItem(value: 'auction', child: Text('Auction')),
+                  DropdownMenuItem(
+                      value: 'estate', child: Text('Estate sale')),
+                  DropdownMenuItem(value: 'trade', child: Text('Trade')),
+                  DropdownMenuItem(value: 'gift', child: Text('Gift')),
+                  DropdownMenuItem(
+                      value: 'inherited', child: Text('Inherited')),
+                  DropdownMenuItem(value: 'found', child: Text('Found')),
+                  DropdownMenuItem(
+                      value: 'unknown', child: Text('Unknown')),
+                ],
+                onChanged: (v) => setState(() => _sourceType = v),
+              ),
+            ),
+          ],
+        ),
+        const SizedBox(height: 12),
+
+        // Cost basis + payment method
+        Row(
+          children: [
+            Expanded(
+              child: DropdownButtonFormField<String>(
+                value: _costBasisType,
+                decoration: const InputDecoration(labelText: 'Cost basis'),
+                items: const [
+                  DropdownMenuItem(
+                      value: 'known', child: Text('Known cost')),
+                  DropdownMenuItem(
+                      value: 'gifted', child: Text('Gifted (no cost)')),
+                  DropdownMenuItem(
+                      value: 'inherited', child: Text('Inherited')),
+                  DropdownMenuItem(
+                      value: 'found', child: Text('Found')),
+                  DropdownMenuItem(
+                      value: 'unknown', child: Text('Unknown cost')),
+                ],
+                onChanged: (v) =>
+                    setState(() => _costBasisType = v ?? 'known'),
+              ),
+            ),
+            const SizedBox(width: 12),
+            Expanded(
+              child: DropdownButtonFormField<String>(
+                value: _paymentMethod,
+                decoration:
+                    const InputDecoration(labelText: 'Payment method'),
+                items: const [
+                  DropdownMenuItem(value: 'cash', child: Text('Cash')),
+                  DropdownMenuItem(value: 'check', child: Text('Check')),
+                  DropdownMenuItem(
+                      value: 'credit_card', child: Text('Credit card')),
+                  DropdownMenuItem(
+                      value: 'paypal', child: Text('PayPal')),
+                  DropdownMenuItem(
+                      value: 'wire', child: Text('Wire transfer')),
+                  DropdownMenuItem(value: 'trade', child: Text('Trade')),
+                  DropdownMenuItem(value: 'other', child: Text('Other')),
+                ],
+                onChanged: (v) => setState(() => _paymentMethod = v),
+              ),
+            ),
+          ],
+        ),
+        const SizedBox(height: 12),
+
+        // Seller info
+        Row(
+          children: [
+            Expanded(child: _field('Seller / dealer name', _sellerNameCtrl)),
+            const SizedBox(width: 12),
+            Expanded(
+                child: _field('Seller contact / URL', _sellerContactCtrl)),
+          ],
+        ),
+        const SizedBox(height: 12),
+        _field('Auction lot number', _lotNumberCtrl),
+        const SizedBox(height: 16),
+
+        // Costs
+        Text('Costs',
+            style: TextStyle(
+                fontSize: 12,
+                color: Colors.grey.shade500,
+                fontWeight: FontWeight.w500)),
+        const SizedBox(height: 8),
+        Row(
+          children: [
+            Expanded(
+                child: _field('Hammer / purchase price', _purchasePriceCtrl,
+                    keyboardType: TextInputType.number, prefix: '\$')),
+            const SizedBox(width: 12),
+            Expanded(
+                child: _field("Buyer's premium", _buyersPremiumCtrl,
+                    keyboardType: TextInputType.number, prefix: '\$')),
+          ],
+        ),
+        const SizedBox(height: 12),
+        Row(
+          children: [
+            Expanded(
+                child: _field('Shipping', _shippingCostCtrl,
+                    keyboardType: TextInputType.number, prefix: '\$')),
+            const SizedBox(width: 12),
+            Expanded(
+                child: _field('Tax paid', _taxPaidCtrl,
+                    keyboardType: TextInputType.number, prefix: '\$')),
+            const SizedBox(width: 12),
+            Expanded(
+                child: _field('Other fees', _otherFeesCtrl,
+                    keyboardType: TextInputType.number, prefix: '\$')),
+          ],
+        ),
+        const SizedBox(height: 12),
+
+        // Live total banner
+        if (computed > 0)
+          Container(
+            padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
+            decoration: BoxDecoration(
+              color: AppColors.primary.withValues(alpha: 0.06),
+              borderRadius: BorderRadius.circular(10),
+              border:
+                  Border.all(color: AppColors.primary.withValues(alpha: 0.15)),
+            ),
+            child: Row(
+              children: [
+                const Icon(Icons.calculate_outlined,
+                    size: 16, color: AppColors.primary),
+                const SizedBox(width: 8),
+                Text('Total cost: ',
+                    style: TextStyle(
+                        fontSize: 13, color: Colors.grey.shade600)),
+                Text(
+                  '\$${computed.toStringAsFixed(2)}',
+                  style: const TextStyle(
+                    fontSize: 15,
+                    fontWeight: FontWeight.bold,
+                    color: AppColors.primary,
+                  ),
+                ),
+                const SizedBox(width: 6),
+                Text('(saved to DB)',
+                    style: TextStyle(
+                        fontSize: 11, color: Colors.grey.shade400)),
+              ],
+            ),
+          ),
+        const SizedBox(height: 12),
+
+        _field('Acquisition notes', _acqNotesCtrl, maxLines: 2),
+      ],
+    );
+  }
+
   Widget _field(
     String label,
     TextEditingController ctrl, {
     TextInputType? keyboardType,
     int maxLines = 1,
     String? hint,
+    String? prefix,
   }) =>
       TextFormField(
         controller: ctrl,
         keyboardType: keyboardType,
         maxLines: maxLines,
-        decoration: InputDecoration(labelText: label, hintText: hint),
+        decoration: InputDecoration(
+          labelText: label,
+          hintText: hint,
+          prefixText: prefix,
+        ),
       );
 }
 

@@ -47,4 +47,14 @@ class AcquisitionRepository {
         .delete()
         .eq('item_id', itemId);
   }
+
+  Future<double> totalCollectionCost() async {
+    final data = await supabase
+        .from(DbConstants.acquisition)
+        .select('total_cost') as List;
+    return data.fold<double>(
+      0.0,
+      (sum, row) => sum + ((row['total_cost'] as num?)?.toDouble() ?? 0.0),
+    );
+  }
 }

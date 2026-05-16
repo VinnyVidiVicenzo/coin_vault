@@ -11,6 +11,7 @@ import 'presentation/screens/settings/settings_screen.dart';
 import 'presentation/screens/valuation/add_valuation_screen.dart';
 import 'presentation/screens/valuation/valuation_history_screen.dart';
 import 'presentation/screens/ebay/ebay_listing_screen.dart';
+import 'presentation/screens/storage/storage_screen.dart';
 import 'core/theme/app_theme.dart';
 
 final _routerProvider = Provider<GoRouter>((ref) {
@@ -79,7 +80,7 @@ final _routerProvider = Provider<GoRouter>((ref) {
           ),
           GoRoute(
             path: '/storage',
-            builder: (_, _) => const _PlaceholderScreen('Storage Manager'),
+            builder: (_, _) => const StorageScreen(),
           ),
           GoRoute(
             path: '/settings',
