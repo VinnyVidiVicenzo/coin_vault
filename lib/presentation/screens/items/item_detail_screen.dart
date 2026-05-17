@@ -732,20 +732,24 @@ class _AssignStorageSheet extends ConsumerStatefulWidget {
 
 class _AssignStorageSheetState
     extends ConsumerState<_AssignStorageSheet> {
+  String? _selectedLocationId;
   String _containerType = 'slab_box';
   final _containerLabelCtrl = TextEditingController();
   final _slotCtrl = TextEditingController();
   String _holderType = 'slab';
   final _flipLabelCtrl = TextEditingController();
   final _envNotesCtrl = TextEditingController();
+  final _newLocationCtrl = TextEditingController();
   DateTime? _lastVerified;
   bool _saving = false;
+  bool _addingLocation = false;
 
   @override
   void initState() {
     super.initState();
     final e = widget.existing;
     if (e != null) {
+      _selectedLocationId = e.storageLocationId;
       _containerType = e.containerType ?? 'slab_box';
       _containerLabelCtrl.text = e.containerLabel ?? '';
       _slotCtrl.text = e.slotEnvelopeNumber ?? '';
@@ -754,7 +758,6 @@ class _AssignStorageSheetState
       _envNotesCtrl.text = e.environmentNotes ?? '';
       _lastVerified = e.lastVerifiedDate;
     } else {
-      // Pre-fill holder type from item's is_slabbed flag
       _holderType = widget.item.isSlabbed ? 'slab' : '2x2_flip';
       _containerType = widget.item.isSlabbed ? 'slab_box' : 'flip_box';
     }
@@ -766,12 +769,19 @@ class _AssignStorageSheetState
     _slotCtrl.dispose();
     _flipLabelCtrl.dispose();
     _envNotesCtrl.dispose();
+    _newLocationCtrl.dispose();
     super.dispose();
   }
 
   @override
   Widget build(BuildContext context) {
     final locationsAsync = ref.watch(storageLocationsProvider);
+    final locations = locationsAsync.valueOrNull ?? [];
+
+    // Auto-select first location if none selected yet
+    if (_selectedLocationId == null && locations.isNotEmpty) {
+      _selectedLocationId = locations.first.id;
+    }
 
     return Padding(
       padding: EdgeInsets.fromLTRB(
@@ -784,9 +794,7 @@ class _AssignStorageSheetState
             Row(
               children: [
                 Text(
-                  widget.existing != null
-                      ? 'Edit storage'
-                      : 'Assign to storage',
+                  widget.existing != null ? 'Edit storage' : 'Assign to storage',
                   style: Theme.of(context).textTheme.titleMedium,
                 ),
                 const Spacer(),
@@ -797,11 +805,57 @@ class _AssignStorageSheetState
                       child: CircularProgressIndicator(strokeWidth: 2))
                 else
                   FilledButton(
-                      onPressed: () => _save(locationsAsync.valueOrNull),
+                      onPressed: _selectedLocationId != null
+                          ? () => _save(locations)
+                          : null,
                       child: const Text('Save')),
               ],
             ),
             const SizedBox(height: 20),
+
+            // Location picker
+            if (locationsAsync.isLoading)
+              const LinearProgressIndicator()
+            else if (locations.isEmpty && !_addingLocation)
+              _NoLocationsPrompt(
+                onAdd: () => setState(() => _addingLocation = true),
+              )
+            else if (_addingLocation)
+              _NewLocationRow(
+                ctrl: _newLocationCtrl,
+                onSave: () => _saveNewLocation(),
+                onCancel: () => setState(() {
+                  _addingLocation = false;
+                  _newLocationCtrl.clear();
+                }),
+              )
+            else
+              Row(
+                children: [
+                  Expanded(
+                    child: DropdownButtonFormField<String>(
+                      value: _selectedLocationId,
+                      decoration: const InputDecoration(
+                          labelText: 'Storage location', isDense: true),
+                      isExpanded: true,
+                      items: locations
+                          .map((l) => DropdownMenuItem(
+                              value: l.id,
+                              child: Text(l.locationName)))
+                          .toList(),
+                      onChanged: (v) =>
+                          setState(() => _selectedLocationId = v),
+                    ),
+                  ),
+                  const SizedBox(width: 8),
+                  IconButton(
+                    icon: const Icon(Icons.add_circle_outline),
+                    tooltip: 'New location',
+                    onPressed: () => setState(() => _addingLocation = true),
+                  ),
+                ],
+              ),
+            const SizedBox(height: 16),
 
             // Container type + label
             Row(
@@ -948,24 +1002,14 @@ class _AssignStorageSheetState
     );
   }
 
-  Future<void> _save(List<StorageLocation>? locations) async {
-    if (locations == null || locations.isEmpty) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(
-          content: Text(
-              'Set up a storage location first (go to Storage tab).'),
-        ),
-      );
-      return;
-    }
-
+  Future<void> _save(List<StorageLocation> locations) async {
+    if (_selectedLocationId == null) return;
     setState(() => _saving = true);
     try {
-      final location = locations.first;
       await ref.read(storageRepositoryProvider).upsert(
             ItemStorage(
               itemId: widget.item.id,
-              storageLocationId: location.id!,
+              storageLocationId: _selectedLocationId!,
               containerType: _containerType,
               containerLabel: _containerLabelCtrl.text.isEmpty
                   ? null
@@ -973,9 +1017,7 @@ class _AssignStorageSheetState
               slotEnvelopeNumber:
                   _slotCtrl.text.isEmpty ? null : _slotCtrl.text,
               holderType: _holderType,
-              notes: _flipLabelCtrl.text.isEmpty
-                  ? null
-                  : _flipLabelCtrl.text,
+              notes: _flipLabelCtrl.text.isEmpty ? null : _flipLabelCtrl.text,
               environmentNotes: _envNotesCtrl.text.isEmpty
                   ? null
                   : _envNotesCtrl.text,
@@ -985,12 +1027,98 @@ class _AssignStorageSheetState
       if (mounted) Navigator.pop(context);
     } catch (e) {
       if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text('Error: $e')),
-        );
+        ScaffoldMessenger.of(context)
+            .showSnackBar(SnackBar(content: Text('Error: $e')));
       }
     } finally {
       if (mounted) setState(() => _saving = false);
     }
   }
+
+  Future<void> _saveNewLocation() async {
+    final name = _newLocationCtrl.text.trim();
+    if (name.isEmpty) return;
+    try {
+      final loc = await ref.read(storageRepositoryProvider).upsertLocation(
+            StorageLocation(locationName: name, locationType: 'home'),
+          );
+      ref.invalidate(storageLocationsProvider);
+      if (mounted) {
+        setState(() {
+          _selectedLocationId = loc.id;
+          _addingLocation = false;
+          _newLocationCtrl.clear();
+        });
+      }
+    } catch (e) {
+      if (mounted) {
+        ScaffoldMessenger.of(context)
+            .showSnackBar(SnackBar(content: Text('Error: $e')));
+      }
+    }
+  }
+}
+
+class _NoLocationsPrompt extends StatelessWidget {
+  final VoidCallback onAdd;
+  const _NoLocationsPrompt({required this.onAdd});
+
+  @override
+  Widget build(BuildContext context) => Container(
+        padding: const EdgeInsets.all(12),
+        decoration: BoxDecoration(
+          color: Colors.amber.shade50,
+          borderRadius: BorderRadius.circular(8),
+          border: Border.all(color: Colors.amber.shade200),
+        ),
+        child: Row(
+          children: [
+            const Icon(Icons.info_outline, color: Colors.amber, size: 18),
+            const SizedBox(width: 8),
+            const Expanded(
+              child: Text('No storage locations yet.',
+                  style: TextStyle(fontSize: 13)),
+            ),
+            TextButton(
+              onPressed: onAdd,
+              child: const Text('Add one'),
+            ),
+          ],
+        ),
+      );
+}
+
+class _NewLocationRow extends StatelessWidget {
+  final TextEditingController ctrl;
+  final VoidCallback onSave;
+  final VoidCallback onCancel;
+
+  const _NewLocationRow({
+    required this.ctrl,
+    required this.onSave,
+    required this.onCancel,
+  });
+
+  @override
+  Widget build(BuildContext context) => Row(
+        children: [
+          Expanded(
+            child: TextFormField(
+              controller: ctrl,
+              autofocus: true,
+              decoration: const InputDecoration(
+                labelText: 'New location name',
+                hintText: 'e.g. Home safe, Desk drawer',
+                isDense: true,
+              ),
+            ),
+          ),
+          IconButton(
+              icon: const Icon(Icons.check, color: AppColors.success),
+              onPressed: onSave),
+          IconButton(
+              icon: const Icon(Icons.close),
+              onPressed: onCancel),
+        ],
+      );
 }
