@@ -39,13 +39,13 @@ class _ItemFormScreenState extends ConsumerState<ItemFormScreen> {
   final _denomNumCtrl = TextEditingController();
   final _yearStartCtrl = TextEditingController();
   final _yearEndCtrl = TextEditingController();
-  final _mintMarkCtrl = TextEditingController();
-  final _seriesCtrl = TextEditingController();
+  String? _mintMark;
+  String? _series;
   final _varietyCtrl = TextEditingController();
   bool _isPublic = false;
 
   // Physical — coins
-  final _metalCtrl = TextEditingController();
+  String? _metal;
   final _weightCtrl = TextEditingController();
   final _diameterCtrl = TextEditingController();
   String? _edgeType;
@@ -142,8 +142,8 @@ class _ItemFormScreenState extends ConsumerState<ItemFormScreen> {
   void dispose() {
     for (final ctrl in [
       _countryCtrl, _issuingCtrl, _denomCtrl, _denomNumCtrl,
-      _yearStartCtrl, _yearEndCtrl, _mintMarkCtrl, _seriesCtrl, _varietyCtrl,
-      _metalCtrl, _weightCtrl, _diameterCtrl,
+      _yearStartCtrl, _yearEndCtrl, _varietyCtrl,
+      _weightCtrl, _diameterCtrl,
       _noteWidthCtrl, _noteHeightCtrl,
       _obverseCtrl, _reverseCtrl, _edgeDescCtrl, _dieMarkersCtrl,
       _serialCtrl, _serialBlockCtrl, _sigCombCtrl, _sealColorCtrl,
@@ -205,11 +205,11 @@ class _ItemFormScreenState extends ConsumerState<ItemFormScreen> {
     _denomNumCtrl.text = item.denominationNumeric?.toString() ?? '';
     _yearStartCtrl.text = item.yearStart?.toString() ?? '';
     _yearEndCtrl.text = item.yearEnd?.toString() ?? '';
-    _mintMarkCtrl.text = item.mintMark ?? '';
-    _seriesCtrl.text = item.series ?? '';
+    _mintMark = item.mintMark;
+    _series = item.series;
     _varietyCtrl.text = item.variety ?? '';
     _isPublic = item.isPublic;
-    _metalCtrl.text = item.metal ?? '';
+    _metal = item.metal;
     _weightCtrl.text = item.weightGrams?.toString() ?? '';
     _diameterCtrl.text = item.diameterMm?.toString() ?? '';
     _edgeType = item.edgeType;
@@ -263,11 +263,11 @@ class _ItemFormScreenState extends ConsumerState<ItemFormScreen> {
       denominationNumeric: double.tryParse(_denomNumCtrl.text),
       yearStart: int.tryParse(_yearStartCtrl.text),
       yearEnd: int.tryParse(_yearEndCtrl.text),
-      mintMark: _mintMarkCtrl.text.isEmpty ? null : _mintMarkCtrl.text,
-      series: _seriesCtrl.text.isEmpty ? null : _seriesCtrl.text,
+      mintMark: _mintMark,
+      series: _series,
       variety: _varietyCtrl.text.isEmpty ? null : _varietyCtrl.text,
       isPublic: _isPublic,
-      metal: _metalCtrl.text.isEmpty ? null : _metalCtrl.text,
+      metal: _metal,
       weightGrams: double.tryParse(_weightCtrl.text),
       diameterMm: double.tryParse(_diameterCtrl.text),
       edgeType: _edgeType,
@@ -530,7 +530,11 @@ class _ItemFormScreenState extends ConsumerState<ItemFormScreen> {
         children: [
           Row(
             children: [
-              Expanded(child: _field('Country', _countryCtrl)),
+              Expanded(child: _autocompleteField(
+                label: 'Country',
+                controller: _countryCtrl,
+                options: DbConstants.countries,
+              )),
               const SizedBox(width: 12),
               Expanded(child: _field('Issuing Authority', _issuingCtrl)),
             ],
@@ -557,9 +561,33 @@ class _ItemFormScreenState extends ConsumerState<ItemFormScreen> {
           const SizedBox(height: 12),
           Row(
             children: [
-              Expanded(child: _field('Mint Mark', _mintMarkCtrl)),
+              Expanded(
+                child: DropdownButtonFormField<String>(
+                  value: _mintMark,
+                  decoration: const InputDecoration(labelText: 'Mint Mark'),
+                  isExpanded: true,
+                  items: [
+                    const DropdownMenuItem(value: null, child: Text('— None —')),
+                    ...DbConstants.mintMarks.map((m) =>
+                        DropdownMenuItem(value: m, child: Text(m))),
+                  ],
+                  onChanged: (v) => setState(() => _mintMark = v),
+                ),
+              ),
               const SizedBox(width: 12),
-              Expanded(child: _field('Series', _seriesCtrl)),
+              Expanded(
+                child: DropdownButtonFormField<String>(
+                  value: _series,
+                  decoration: const InputDecoration(labelText: 'Series'),
+                  isExpanded: true,
+                  items: [
+                    const DropdownMenuItem(value: null, child: Text('— None —')),
+                    ..._seriesOptions().map((s) =>
+                        DropdownMenuItem(value: s, child: Text(s))),
+                  ],
+                  onChanged: (v) => setState(() => _series = v),
+                ),
+              ),
             ],
           ),
           const SizedBox(height: 12),
@@ -567,11 +595,51 @@ class _ItemFormScreenState extends ConsumerState<ItemFormScreen> {
         ],
       );
 
+  List<String> _seriesOptions() {
+    if (_itemType == 'note') {
+      return DbConstants.browseCategories
+          .firstWhere((c) => c.id == 'paper_money')
+          .subcategories
+          .where((s) => !s.startsWith('All'))
+          .toList();
+    }
+    if (_itemType == 'token' || _itemType == 'medal') {
+      return DbConstants.browseCategories
+          .firstWhere((c) => c.id == 'exonumia')
+          .subcategories
+          .where((s) => !s.startsWith('All'))
+          .toList();
+    }
+    // coin — show US + World subcategories
+    return [
+      ...DbConstants.browseCategories
+          .firstWhere((c) => c.id == 'us_coins')
+          .subcategories
+          .where((s) => !s.startsWith('All')),
+      ...DbConstants.browseCategories
+          .firstWhere((c) => c.id == 'world_coins')
+          .subcategories
+          .where((s) => !s.startsWith('All')),
+    ];
+  }
+
   Widget _coinPhysicalFields() => Column(
         children: [
           Row(
             children: [
-              Expanded(child: _field('Metal', _metalCtrl)),
+              Expanded(
+                child: DropdownButtonFormField<String>(
+                  value: _metal,
+                  decoration: const InputDecoration(labelText: 'Metal'),
+                  isExpanded: true,
+                  items: [
+                    const DropdownMenuItem(value: null, child: Text('— Select —')),
+                    ...DbConstants.metals.map((m) =>
+                        DropdownMenuItem(value: m, child: Text(m))),
+                  ],
+                  onChanged: (v) => setState(() => _metal = v),
+                ),
+              ),
               const SizedBox(width: 12),
               Expanded(child: _field('Weight (g)', _weightCtrl,
                   keyboardType: TextInputType.number)),
@@ -680,8 +748,22 @@ class _ItemFormScreenState extends ConsumerState<ItemFormScreen> {
         children: [
           Row(
             children: [
-              Expanded(child: _field('Grade', _gradeCtrl,
-                  hint: 'e.g. MS65, VF30')),
+              Expanded(
+                child: _autocompleteField(
+                  label: 'Grade',
+                  controller: _gradeCtrl,
+                  options: _itemType == 'note'
+                      ? DbConstants.noteGrades
+                      : DbConstants.coinGrades,
+                  onSelected: (g) {
+                    _gradeCtrl.text = g;
+                    // Auto-fill numeric from grade string (e.g. "MS-65" → 65)
+                    final num = RegExp(r'(\d+)$').firstMatch(g)?.group(1);
+                    if (num != null) _gradeNumCtrl.text = num;
+                    setState(() {});
+                  },
+                ),
+              ),
               const SizedBox(width: 12),
               Expanded(child: _field('Grade (numeric)', _gradeNumCtrl,
                   keyboardType: TextInputType.number)),
@@ -1076,6 +1158,38 @@ class _ItemFormScreenState extends ConsumerState<ItemFormScreen> {
           prefixText: prefix,
         ),
       );
+
+  Widget _autocompleteField({
+    required String label,
+    required TextEditingController controller,
+    required List<String> options,
+    void Function(String)? onSelected,
+  }) {
+    return Autocomplete<String>(
+      initialValue: TextEditingValue(text: controller.text),
+      optionsBuilder: (value) {
+        if (value.text.isEmpty) return const [];
+        final q = value.text.toLowerCase();
+        return options.where((o) => o.toLowerCase().contains(q)).take(8);
+      },
+      onSelected: (selection) {
+        controller.text = selection;
+        onSelected?.call(selection);
+        setState(() {});
+      },
+      fieldViewBuilder: (context, textCtrl, focusNode, onSubmitted) {
+        // Keep external controller in sync
+        textCtrl.text = controller.text;
+        textCtrl.selection = TextSelection.collapsed(offset: textCtrl.text.length);
+        return TextFormField(
+          controller: textCtrl,
+          focusNode: focusNode,
+          decoration: InputDecoration(labelText: label),
+          onChanged: (v) => controller.text = v,
+        );
+      },
+    );
+  }
 }
 
 class _PendingImage {

@@ -218,6 +218,50 @@ class DbConstants {
     GradeRange(label: 'Proof Gem (PR/PF-65+)', min: 65, max: 70),
   ];
 
+  // Common coin grades (Sheldon scale)
+  static const coinGrades = [
+    'P-1', 'F-2', 'AG-3', 'G-4', 'G-6', 'VG-8', 'VG-10',
+    'F-12', 'F-15', 'VF-20', 'VF-25', 'VF-30', 'VF-35',
+    'EF-40', 'EF-45', 'AU-50', 'AU-55', 'AU-58',
+    'MS-60', 'MS-61', 'MS-62', 'MS-63', 'MS-64',
+    'MS-65', 'MS-66', 'MS-67', 'MS-68', 'MS-69', 'MS-70',
+    'PR-60', 'PR-61', 'PR-62', 'PR-63', 'PR-64',
+    'PR-65', 'PR-66', 'PR-67', 'PR-68', 'PR-69', 'PR-70',
+    'PF-60', 'PF-61', 'PF-62', 'PF-63', 'PF-64',
+    'PF-65', 'PF-66', 'PF-67', 'PF-68', 'PF-69', 'PF-70',
+    'AU Details', 'EF Details', 'VF Details', 'F Details',
+    'VG Details', 'G Details', 'AG Details',
+  ];
+
+  // Note grades (PMG / PCGS scale)
+  static const noteGrades = [
+    '10', '12', '15', '20', '25', '30', '35',
+    '40', '45', '50', '53', '55', '58',
+    '60', '61', 'Unc 62', 'Unc 63', 'Unc 64', 'Unc 65',
+    'Unc 66', 'Unc 67', 'Unc 68', 'Unc 69', 'Unc 70',
+    'Choice About New 55', 'About Uncirculated 50',
+    'Details: Repaired', 'Details: Restored', 'Details: Trimmed',
+  ];
+
+  // Common countries for coin collecting
+  static const countries = [
+    'United States', 'Canada', 'Mexico', 'United Kingdom', 'Germany',
+    'France', 'Italy', 'Spain', 'Portugal', 'Netherlands', 'Belgium',
+    'Switzerland', 'Austria', 'Sweden', 'Norway', 'Denmark', 'Finland',
+    'Russia', 'Soviet Union', 'Poland', 'Czech Republic', 'Hungary',
+    'Romania', 'Bulgaria', 'Yugoslavia', 'Greece', 'Turkey',
+    'Israel', 'Saudi Arabia', 'Iran', 'Iraq', 'Egypt', 'Morocco',
+    'South Africa', 'Nigeria', 'Kenya', 'Ethiopia', 'Zimbabwe',
+    'India', 'Pakistan', 'China', 'Japan', 'South Korea', 'North Korea',
+    'Taiwan', 'Hong Kong', 'Singapore', 'Thailand', 'Vietnam',
+    'Indonesia', 'Philippines', 'Malaysia', 'Australia', 'New Zealand',
+    'Argentina', 'Brazil', 'Chile', 'Peru', 'Colombia', 'Venezuela',
+    'Cuba', 'Haiti', 'Dominican Republic', 'Guatemala', 'Panama',
+    'British India', 'British West Africa', 'French Indo-China',
+    'Ancient Greece', 'Ancient Rome', 'Byzantine', 'Ottoman Empire',
+    'Holy Roman Empire', 'Papal States',
+  ];
+
   // Common mint marks
   static const mintMarks = [
     'No Mint Mark (P)',
