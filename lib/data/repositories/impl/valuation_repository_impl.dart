@@ -52,30 +52,42 @@ class ValuationRepository {
         .eq('id', valuationId);
   }
 
-  // For dashboard: sum of the most-recent valuation per item
+  // For dashboard: sum of the most-recent valuation per item.
+  // Uses the current_valuations view when available (migration 001),
+  // then falls back to in-memory deduplication.
   Future<double> totalCollectionValue() async {
     try {
-      final userId = supabase.auth.currentUser?.id;
-      if (userId == null) return 0.0;
-
-      // Fetch all valuations newest-first; take only the first per item_id
       final data = await supabase
-          .from(DbConstants.valuationHistory)
-          .select('item_id, estimated_value, valuation_date')
-          .eq('owner_id', userId)
-          .order('valuation_date', ascending: false) as List;
-
-      final seen = <String>{};
-      double total = 0.0;
-      for (final row in data) {
-        final itemId = row['item_id'] as String;
-        if (seen.add(itemId)) {
-          total += (row['estimated_value'] as num?)?.toDouble() ?? 0.0;
-        }
-      }
-      return total;
+          .from('current_valuations')
+          .select('estimated_value') as List;
+      return data.fold<double>(
+        0.0,
+        (sum, row) => sum + ((row['estimated_value'] as num?)?.toDouble() ?? 0.0),
+      );
     } catch (_) {
-      return 0.0;
+      // Fallback: view doesn't exist yet — deduplicate in memory
+      try {
+        final userId = supabase.auth.currentUser?.id;
+        if (userId == null) return 0.0;
+
+        final data = await supabase
+            .from(DbConstants.valuationHistory)
+            .select('item_id, estimated_value, valuation_date')
+            .eq('owner_id', userId)
+            .order('valuation_date', ascending: false) as List;
+
+        final seen = <String>{};
+        double total = 0.0;
+        for (final row in data) {
+          final itemId = row['item_id'] as String;
+          if (seen.add(itemId)) {
+            total += (row['estimated_value'] as num?)?.toDouble() ?? 0.0;
+          }
+        }
+        return total;
+      } catch (_) {
+        return 0.0;
+      }
     }
   }
 }

@@ -1,3 +1,4 @@
+import 'package:supabase_flutter/supabase_flutter.dart' show TextSearchType;
 import '../../models/item.dart';
 import '../../models/catalog_reference.dart';
 import '../../models/item_image.dart';
@@ -103,22 +104,32 @@ class ItemRepository {
       return _db?.searchCachedItems(query) ?? [];
     }
 
-    // Escape single quotes so the .or() filter string is safe
-    final q = query.replaceAll("'", "''");
-    final data = await supabase
-        .from(DbConstants.items)
-        .select('*, catalog_references(*), item_images(*)')
-        .or('denomination.ilike.%$q%'
-            ',country.ilike.%$q%'
-            ',series.ilike.%$q%'
-            ',variety.ilike.%$q%'
-            ',grade.ilike.%$q%'
-            ',cert_number.ilike.%$q%'
-            ',serial_number.ilike.%$q%'
-            ',issuing_authority.ilike.%$q%'
-            ',mint_mark.ilike.%$q%')
-        .limit(limit) as List;
-    return data.map((row) => _rowToItem(row as Map<String, dynamic>)).toList();
+    // Try GIN full-text search first (fast); fall back to ILIKE if the
+    // search_vector column hasn't been added to the DB yet.
+    try {
+      final data = await supabase
+          .from(DbConstants.items)
+          .select('*, catalog_references(*), item_images(*)')
+          .textSearch('search_vector', query, type: TextSearchType.websearch)
+          .limit(limit) as List;
+      return data.map((row) => _rowToItem(row as Map<String, dynamic>)).toList();
+    } catch (_) {
+      final q = query.replaceAll("'", "''");
+      final data = await supabase
+          .from(DbConstants.items)
+          .select('*, catalog_references(*), item_images(*)')
+          .or('denomination.ilike.%$q%'
+              ',country.ilike.%$q%'
+              ',series.ilike.%$q%'
+              ',variety.ilike.%$q%'
+              ',grade.ilike.%$q%'
+              ',cert_number.ilike.%$q%'
+              ',serial_number.ilike.%$q%'
+              ',issuing_authority.ilike.%$q%'
+              ',mint_mark.ilike.%$q%')
+          .limit(limit) as List;
+      return data.map((row) => _rowToItem(row as Map<String, dynamic>)).toList();
+    }
   }
 
   // ── Single item ───────────────────────────────────────────
