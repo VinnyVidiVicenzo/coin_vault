@@ -49,12 +49,28 @@ class AcquisitionRepository {
   }
 
   Future<double> totalCollectionCost() async {
-    final data = await supabase
-        .from(DbConstants.acquisition)
-        .select('total_cost') as List;
-    return data.fold<double>(
-      0.0,
-      (sum, row) => sum + ((row['total_cost'] as num?)?.toDouble() ?? 0.0),
-    );
+    try {
+      final userId = supabase.auth.currentUser?.id;
+      if (userId == null) return 0.0;
+
+      final data = await supabase
+          .from(DbConstants.acquisition)
+          .select('purchase_price, buyers_premium, shipping_cost, tax_paid, other_fees, total_cost')
+          .eq('owner_id', userId) as List;
+
+      return data.fold<double>(0.0, (sum, row) {
+        // Use generated total_cost column if present, otherwise compute from parts
+        final stored = (row['total_cost'] as num?)?.toDouble();
+        if (stored != null) return sum + stored;
+        return sum +
+            ((row['purchase_price'] as num?)?.toDouble() ?? 0.0) +
+            ((row['buyers_premium'] as num?)?.toDouble() ?? 0.0) +
+            ((row['shipping_cost'] as num?)?.toDouble() ?? 0.0) +
+            ((row['tax_paid'] as num?)?.toDouble() ?? 0.0) +
+            ((row['other_fees'] as num?)?.toDouble() ?? 0.0);
+      });
+    } catch (_) {
+      return 0.0;
+    }
   }
 }
