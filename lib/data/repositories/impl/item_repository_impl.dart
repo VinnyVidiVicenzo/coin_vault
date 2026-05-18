@@ -103,10 +103,20 @@ class ItemRepository {
       return _db?.searchCachedItems(query) ?? [];
     }
 
+    // Escape single quotes so the .or() filter string is safe
+    final q = query.replaceAll("'", "''");
     final data = await supabase
         .from(DbConstants.items)
         .select('*, catalog_references(*), item_images(*)')
-        .textSearch('search_vector', query)
+        .or('denomination.ilike.%$q%'
+            ',country.ilike.%$q%'
+            ',series.ilike.%$q%'
+            ',variety.ilike.%$q%'
+            ',grade.ilike.%$q%'
+            ',cert_number.ilike.%$q%'
+            ',serial_number.ilike.%$q%'
+            ',issuing_authority.ilike.%$q%'
+            ',mint_mark.ilike.%$q%')
         .limit(limit) as List;
     return data.map((row) => _rowToItem(row as Map<String, dynamic>)).toList();
   }

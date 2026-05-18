@@ -7,6 +7,7 @@ import '../../widgets/items/item_grid_card.dart';
 import '../../widgets/common/collection_filter_panel.dart';
 import '../../../core/constants/db_constants.dart';
 import '../../../core/theme/app_colors.dart';
+import '../../../core/services/export_service.dart';
 
 class ItemListScreen extends ConsumerStatefulWidget {
   const ItemListScreen({super.key});
@@ -37,6 +38,44 @@ class _ItemListScreenState extends ConsumerState<ItemListScreen> {
       appBar: AppBar(
         title: const Text('My Collection'),
         actions: [
+          // Export
+          if (items.valueOrNull?.isNotEmpty == true)
+            PopupMenuButton<String>(
+              icon: const Icon(Icons.download_outlined),
+              tooltip: 'Export',
+              onSelected: (format) async {
+                final list = items.valueOrNull ?? [];
+                try {
+                  if (format == 'csv') {
+                    await ExportService.exportCsv(list);
+                  } else {
+                    await ExportService.exportPdf(list);
+                  }
+                } catch (e) {
+                  if (context.mounted) {
+                    ScaffoldMessenger.of(context).showSnackBar(
+                      SnackBar(content: Text('Export failed: $e')),
+                    );
+                  }
+                }
+              },
+              itemBuilder: (_) => const [
+                PopupMenuItem(
+                    value: 'csv',
+                    child: Row(children: [
+                      Icon(Icons.table_chart_outlined, size: 18),
+                      SizedBox(width: 8),
+                      Text('Export CSV'),
+                    ])),
+                PopupMenuItem(
+                    value: 'pdf',
+                    child: Row(children: [
+                      Icon(Icons.picture_as_pdf_outlined, size: 18),
+                      SizedBox(width: 8),
+                      Text('Export PDF'),
+                    ])),
+              ],
+            ),
           // Sort dropdown
           PopupMenuButton<String>(
             icon: const Icon(Icons.sort),

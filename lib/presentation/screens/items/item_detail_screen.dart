@@ -1,14 +1,19 @@
+import 'dart:io';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 import 'package:cached_network_image/cached_network_image.dart';
 import 'package:photo_view/photo_view.dart';
 import 'package:photo_view/photo_view_gallery.dart';
+import 'package:image_picker/image_picker.dart';
 import 'package:intl/intl.dart';
 import '../../../data/models/item.dart';
+import '../../../data/models/item_image.dart';
 import '../../../data/models/storage_location.dart';
+import '../../../data/remote/supabase/storage_service.dart';
 import '../../providers/items/items_provider.dart';
 import '../../providers/storage/storage_provider.dart';
+import '../../providers/wordpress/wordpress_provider.dart';
 import '../../../core/theme/app_colors.dart';
 import '../../../core/utils/grade_utils.dart';
 
@@ -79,6 +84,7 @@ class _ItemDetailViewState extends ConsumerState<_ItemDetailView>
                 .read(itemsListProvider.notifier)
                 .togglePublic(item.id, !item.isPublic),
           ),
+          _WpSyncButton(item: item),
           IconButton(
             icon: const Icon(Icons.edit),
             onPressed: () => context.push('/items/${item.id}/edit'),
@@ -168,6 +174,70 @@ class _ItemDetailViewState extends ConsumerState<_ItemDetailView>
   }
 }
 
+// ── WordPress sync button ───────────────────────────────────────────
+
+class _WpSyncButton extends ConsumerStatefulWidget {
+  final Item item;
+  const _WpSyncButton({required this.item});
+
+  @override
+  ConsumerState<_WpSyncButton> createState() => _WpSyncButtonState();
+}
+
+class _WpSyncButtonState extends ConsumerState<_WpSyncButton> {
+  bool _syncing = false;
+
+  @override
+  Widget build(BuildContext context) {
+    if (_syncing) {
+      return const Padding(
+        padding: EdgeInsets.all(14),
+        child: SizedBox(
+            width: 20,
+            height: 20,
+            child: CircularProgressIndicator(strokeWidth: 2)),
+      );
+    }
+    return IconButton(
+      icon: const Icon(Icons.language),
+      tooltip: 'Sync to WordPress',
+      onPressed: _sync,
+    );
+  }
+
+  Future<void> _sync() async {
+    final service = ref.read(wordPressServiceProvider);
+    final credentials = await service.loadCredentials();
+    if (credentials == null) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(const SnackBar(
+          content: Text('WordPress not configured — go to Settings.'),
+        ));
+      }
+      return;
+    }
+    setState(() => _syncing = true);
+    try {
+      final result = await service.syncItem(credentials, widget.item);
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(SnackBar(
+          content: Text('Synced ✓  ${result.url}'),
+          duration: const Duration(seconds: 4),
+        ));
+      }
+    } catch (e) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(SnackBar(
+          content: Text('Sync failed: $e'),
+          backgroundColor: AppColors.error,
+        ));
+      }
+    } finally {
+      if (mounted) setState(() => _syncing = false);
+    }
+  }
+}
+
 // ── Identity tab ────────────────────────────────────────────────────
 
 class _IdentityTab extends StatelessWidget {
@@ -227,78 +297,188 @@ class _IdentityTab extends StatelessWidget {
 
 // ── Images tab ─────────────────────────────────────────────────────
 
-class _ImagesTab extends StatelessWidget {
+class _ImagesTab extends ConsumerStatefulWidget {
   final Item item;
   const _ImagesTab({required this.item});
 
   @override
-  Widget build(BuildContext context) {
-    if (item.images.isEmpty) {
-      return const Center(
-        child: Column(
-          mainAxisAlignment: MainAxisAlignment.center,
-          children: [
-            Icon(Icons.photo_library_outlined, size: 64, color: Colors.grey),
-            SizedBox(height: 16),
-            Text('No images yet. Edit the item to add photos.'),
-          ],
-        ),
+  ConsumerState<_ImagesTab> createState() => _ImagesTabState();
+}
+
+class _ImagesTabState extends ConsumerState<_ImagesTab> {
+  bool _uploading = false;
+
+  static const _imageTypes = [
+    ('obverse', 'Obverse'),
+    ('reverse', 'Reverse'),
+    ('edge', 'Edge'),
+    ('slab_front', 'Slab front'),
+    ('close_up', 'Close-up'),
+    ('receipt', 'Receipt'),
+  ];
+
+  Future<void> _pickAndUpload(String imageType) async {
+    final picker = ImagePicker();
+    final xFile =
+        await picker.pickImage(source: ImageSource.gallery, imageQuality: 85);
+    if (xFile == null) return;
+
+    setState(() => _uploading = true);
+    try {
+      final storageService = StorageService();
+      final repo = ref.read(itemRepositoryProvider);
+      final item = widget.item;
+
+      final path = await storageService.uploadItemImage(
+        itemId: item.id,
+        imageType: imageType,
+        file: File(xFile.path),
+        isPublic: item.isPublic,
       );
+      final publicUrl =
+          item.isPublic ? storageService.getPublicUrl(path) : null;
+
+      await repo.addImageRecord(ItemImage(
+        itemId: item.id,
+        imageType: imageType,
+        storagePath: path,
+        publicUrl: publicUrl,
+        isPublic: item.isPublic,
+      ));
+
+      ref.invalidate(itemDetailProvider(item.id));
+    } catch (e) {
+      if (mounted) {
+        ScaffoldMessenger.of(context)
+            .showSnackBar(SnackBar(content: Text('Upload failed: $e')));
+      }
+    } finally {
+      if (mounted) setState(() => _uploading = false);
     }
+  }
 
-    final publicImages = item.images.where((i) => i.publicUrl != null).toList();
+  @override
+  Widget build(BuildContext context) {
+    final item = widget.item;
+    final publicImages =
+        item.images.where((i) => i.publicUrl != null).toList();
 
-    return GridView.builder(
-      padding: const EdgeInsets.all(8),
-      gridDelegate: const SliverGridDelegateWithFixedCrossAxisCount(
-        crossAxisCount: 2,
-        crossAxisSpacing: 8,
-        mainAxisSpacing: 8,
-      ),
-      itemCount: publicImages.length,
-      itemBuilder: (context, index) {
-        final img = publicImages[index];
-        return GestureDetector(
-          onTap: () => _openGallery(context, publicImages, index),
-          child: ClipRRect(
-            borderRadius: BorderRadius.circular(8),
-            child: Stack(
-              fit: StackFit.expand,
-              children: [
-                CachedNetworkImage(
-                  imageUrl: img.publicUrl!,
-                  fit: BoxFit.cover,
-                ),
-                Positioned(
-                  bottom: 4,
-                  left: 4,
-                  child: Container(
-                    padding: const EdgeInsets.symmetric(
-                        horizontal: 6, vertical: 2),
-                    decoration: BoxDecoration(
-                      color: Colors.black54,
-                      borderRadius: BorderRadius.circular(4),
-                    ),
-                    child: Text(
-                      img.imageType.replaceAll('_', ' '),
-                      style: const TextStyle(
-                          color: Colors.white, fontSize: 10),
-                    ),
+    return Column(
+      children: [
+        // Image grid
+        Expanded(
+          child: publicImages.isEmpty
+              ? Center(
+                  child: Column(
+                    mainAxisAlignment: MainAxisAlignment.center,
+                    children: [
+                      Icon(Icons.photo_library_outlined,
+                          size: 64, color: Colors.grey.shade300),
+                      const SizedBox(height: 12),
+                      Text('No images yet',
+                          style: TextStyle(color: Colors.grey.shade500)),
+                    ],
                   ),
+                )
+              : GridView.builder(
+                  padding: const EdgeInsets.all(8),
+                  gridDelegate:
+                      const SliverGridDelegateWithFixedCrossAxisCount(
+                    crossAxisCount: 2,
+                    crossAxisSpacing: 8,
+                    mainAxisSpacing: 8,
+                  ),
+                  itemCount: publicImages.length,
+                  itemBuilder: (context, index) {
+                    final img = publicImages[index];
+                    return GestureDetector(
+                      onTap: () =>
+                          _openGallery(context, publicImages, index),
+                      child: ClipRRect(
+                        borderRadius: BorderRadius.circular(8),
+                        child: Stack(
+                          fit: StackFit.expand,
+                          children: [
+                            CachedNetworkImage(
+                              imageUrl: img.publicUrl!,
+                              fit: BoxFit.cover,
+                            ),
+                            Positioned(
+                              bottom: 4,
+                              left: 4,
+                              child: Container(
+                                padding: const EdgeInsets.symmetric(
+                                    horizontal: 6, vertical: 2),
+                                decoration: BoxDecoration(
+                                  color: Colors.black54,
+                                  borderRadius: BorderRadius.circular(4),
+                                ),
+                                child: Text(
+                                  img.imageType.replaceAll('_', ' '),
+                                  style: const TextStyle(
+                                      color: Colors.white, fontSize: 10),
+                                ),
+                              ),
+                            ),
+                          ],
+                        ),
+                      ),
+                    );
+                  },
                 ),
-              ],
-            ),
+        ),
+
+        // Add photo strip
+        Container(
+          color: Colors.grey.shade50,
+          padding: const EdgeInsets.fromLTRB(12, 8, 12, 12),
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Row(
+                children: [
+                  Text('Add photo',
+                      style: TextStyle(
+                          fontSize: 12,
+                          fontWeight: FontWeight.w600,
+                          color: Colors.grey.shade600)),
+                  if (_uploading) ...[
+                    const SizedBox(width: 10),
+                    const SizedBox(
+                        width: 14,
+                        height: 14,
+                        child: CircularProgressIndicator(strokeWidth: 2)),
+                  ],
+                ],
+              ),
+              const SizedBox(height: 6),
+              Wrap(
+                spacing: 6,
+                runSpacing: 6,
+                children: _imageTypes
+                    .map((t) => ActionChip(
+                          label: Text(t.$2,
+                              style: const TextStyle(fontSize: 11)),
+                          avatar: const Icon(Icons.add_a_photo_outlined,
+                              size: 14),
+                          onPressed:
+                              _uploading ? null : () => _pickAndUpload(t.$1),
+                        ))
+                    .toList(),
+              ),
+            ],
           ),
-        );
-      },
+        ),
+      ],
     );
   }
 
-  void _openGallery(BuildContext context, List images, int initialIndex) {
+  void _openGallery(BuildContext context, List<ItemImage> images, int index) {
     Navigator.push(
       context,
       MaterialPageRoute(
-        builder: (_) => _PhotoGallery(images: images, initialIndex: initialIndex),
+        builder: (_) =>
+            _PhotoGallery(images: images, initialIndex: index),
       ),
     );
   }
