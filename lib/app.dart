@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 import 'presentation/providers/auth/auth_provider.dart';
+import 'presentation/providers/core_providers.dart';
 import 'presentation/screens/auth/login_screen.dart';
 import 'presentation/screens/dashboard/dashboard_screen.dart';
 import 'presentation/screens/items/item_list_screen.dart';
@@ -118,15 +119,15 @@ class CoinVaultApp extends ConsumerWidget {
   }
 }
 
-class _AppShell extends StatefulWidget {
+class _AppShell extends ConsumerStatefulWidget {
   final Widget child;
   const _AppShell({required this.child});
 
   @override
-  State<_AppShell> createState() => _AppShellState();
+  ConsumerState<_AppShell> createState() => _AppShellState();
 }
 
-class _AppShellState extends State<_AppShell> {
+class _AppShellState extends ConsumerState<_AppShell> {
   int _selectedIndex = 0;
 
   static const _destinations = [
@@ -140,101 +141,145 @@ class _AppShellState extends State<_AppShell> {
   @override
   Widget build(BuildContext context) {
     final isWide = MediaQuery.of(context).size.width >= 600;
+    final onlineAsync = ref.watch(onlineStreamProvider);
+    final isOffline = onlineAsync.valueOrNull == false;
 
-    if (isWide) {
-      return Scaffold(
-        body: Row(
-          children: [
-            // Dark futuristic sidebar
-            Container(
-              width: 72,
-              decoration: const BoxDecoration(
-                gradient: LinearGradient(
-                  begin: Alignment.topCenter,
-                  end: Alignment.bottomCenter,
-                  colors: [Color(0xFF0A0E27), Color(0xFF141B45)],
-                ),
-              ),
-              child: Column(
-                children: [
-                  const SizedBox(height: 16),
-                  // Logo
-                  Container(
-                    width: 40,
-                    height: 40,
-                    decoration: BoxDecoration(
-                      color: const Color(0xFFFFBB00).withValues(alpha: 0.15),
-                      borderRadius: BorderRadius.circular(12),
-                      border: Border.all(
-                          color: const Color(0xFFFFBB00).withValues(alpha: 0.3)),
-                    ),
-                    child: const Icon(Icons.monetization_on,
-                        color: Color(0xFFFFBB00), size: 22),
+    Widget buildContent() {
+      if (isWide) {
+        return Scaffold(
+          body: Row(
+            children: [
+              // Dark futuristic sidebar
+              Container(
+                width: 72,
+                decoration: const BoxDecoration(
+                  gradient: LinearGradient(
+                    begin: Alignment.topCenter,
+                    end: Alignment.bottomCenter,
+                    colors: [Color(0xFF0A0E27), Color(0xFF141B45)],
                   ),
-                  const SizedBox(height: 24),
-                  const Divider(color: Colors.white10, height: 1),
-                  const SizedBox(height: 8),
-                  ..._destinations.asMap().entries.map((e) {
-                    final selected = _selectedIndex == e.key;
-                    return Tooltip(
-                      message: e.value.label,
-                      preferBelow: false,
-                      child: GestureDetector(
-                        onTap: () {
-                          setState(() => _selectedIndex = e.key);
-                          context.go(e.value.route);
-                        },
-                        child: AnimatedContainer(
-                          duration: const Duration(milliseconds: 200),
-                          width: 52,
-                          height: 52,
-                          margin: const EdgeInsets.symmetric(vertical: 2),
-                          decoration: BoxDecoration(
-                            color: selected
-                                ? const Color(0xFFFFBB00).withValues(alpha: 0.15)
-                                : Colors.transparent,
-                            borderRadius: BorderRadius.circular(14),
-                            border: selected
-                                ? Border.all(
-                                    color: const Color(0xFFFFBB00)
-                                        .withValues(alpha: 0.4))
-                                : null,
-                          ),
-                          child: Icon(
-                            e.value.icon,
-                            color: selected
-                                ? const Color(0xFFFFBB00)
-                                : Colors.white.withValues(alpha: 0.4),
-                            size: 22,
+                ),
+                child: Column(
+                  children: [
+                    const SizedBox(height: 16),
+                    Container(
+                      width: 40,
+                      height: 40,
+                      decoration: BoxDecoration(
+                        color: const Color(0xFFFFBB00).withValues(alpha: 0.15),
+                        borderRadius: BorderRadius.circular(12),
+                        border: Border.all(
+                            color: const Color(0xFFFFBB00).withValues(alpha: 0.3)),
+                      ),
+                      child: const Icon(Icons.monetization_on,
+                          color: Color(0xFFFFBB00), size: 22),
+                    ),
+                    const SizedBox(height: 24),
+                    const Divider(color: Colors.white10, height: 1),
+                    const SizedBox(height: 8),
+                    ..._destinations.asMap().entries.map((e) {
+                      final selected = _selectedIndex == e.key;
+                      return Tooltip(
+                        message: e.value.label,
+                        preferBelow: false,
+                        child: GestureDetector(
+                          onTap: () {
+                            setState(() => _selectedIndex = e.key);
+                            context.go(e.value.route);
+                          },
+                          child: AnimatedContainer(
+                            duration: const Duration(milliseconds: 200),
+                            width: 52,
+                            height: 52,
+                            margin: const EdgeInsets.symmetric(vertical: 2),
+                            decoration: BoxDecoration(
+                              color: selected
+                                  ? const Color(0xFFFFBB00).withValues(alpha: 0.15)
+                                  : Colors.transparent,
+                              borderRadius: BorderRadius.circular(14),
+                              border: selected
+                                  ? Border.all(
+                                      color: const Color(0xFFFFBB00)
+                                          .withValues(alpha: 0.4))
+                                  : null,
+                            ),
+                            child: Icon(
+                              e.value.icon,
+                              color: selected
+                                  ? const Color(0xFFFFBB00)
+                                  : Colors.white.withValues(alpha: 0.4),
+                              size: 22,
+                            ),
                           ),
                         ),
-                      ),
-                    );
-                  }),
-                ],
+                      );
+                    }),
+                  ],
+                ),
               ),
-            ),
-            Expanded(child: widget.child),
-          ],
+              Expanded(child: widget.child),
+            ],
+          ),
+        );
+      }
+
+      // Bottom navigation for phones
+      return Scaffold(
+        body: widget.child,
+        bottomNavigationBar: NavigationBar(
+          selectedIndex: _selectedIndex,
+          onDestinationSelected: (i) {
+            setState(() => _selectedIndex = i);
+            context.go(_destinations[i].route);
+          },
+          destinations: _destinations
+              .map((d) => NavigationDestination(
+                    icon: Icon(d.icon),
+                    label: d.label,
+                  ))
+              .toList(),
         ),
       );
     }
 
-    // Bottom navigation for Android phones
-    return Scaffold(
-      body: widget.child,
-      bottomNavigationBar: NavigationBar(
-        selectedIndex: _selectedIndex,
-        onDestinationSelected: (i) {
-          setState(() => _selectedIndex = i);
-          context.go(_destinations[i].route);
-        },
-        destinations: _destinations
-            .map((d) => NavigationDestination(
-                  icon: Icon(d.icon),
-                  label: d.label,
-                ))
-            .toList(),
+    return Column(
+      children: [
+        if (isOffline) const _OfflineBanner(),
+        Expanded(child: buildContent()),
+      ],
+    );
+  }
+}
+
+class _OfflineBanner extends StatelessWidget {
+  const _OfflineBanner();
+
+  @override
+  Widget build(BuildContext context) {
+    return Material(
+      color: const Color(0xFFFF8C00),
+      child: SafeArea(
+        bottom: false,
+        child: SizedBox(
+          width: double.infinity,
+          child: Padding(
+            padding: const EdgeInsets.symmetric(vertical: 6, horizontal: 16),
+            child: Row(
+              mainAxisAlignment: MainAxisAlignment.center,
+              children: [
+                const Icon(Icons.wifi_off, size: 14, color: Colors.white),
+                const SizedBox(width: 6),
+                Text(
+                  'You\'re offline — browsing cached collection',
+                  style: Theme.of(context)
+                      .textTheme
+                      .labelSmall
+                      ?.copyWith(color: Colors.white, fontWeight: FontWeight.w600),
+                ),
+              ],
+            ),
+          ),
+        ),
       ),
     );
   }

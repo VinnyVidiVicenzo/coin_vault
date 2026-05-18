@@ -1,11 +1,15 @@
 import 'package:riverpod_annotation/riverpod_annotation.dart';
 import '../../../data/models/item.dart';
 import '../../../data/repositories/impl/item_repository_impl.dart';
+import '../core_providers.dart';
 
 part 'items_provider.g.dart';
 
 @riverpod
-ItemRepository itemRepository(ItemRepositoryRef ref) => ItemRepository();
+ItemRepository itemRepository(ItemRepositoryRef ref) => ItemRepository(
+      db: ref.read(appDatabaseProvider),
+      connectivity: ref.read(connectivityServiceProvider),
+    );
 
 @riverpod
 class ItemsList extends _$ItemsList {
