@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
+import 'package:url_launcher/url_launcher.dart';
 import '../../providers/items/items_provider.dart';
 import '../../providers/dashboard/dashboard_provider.dart';
 import '../../widgets/common/gradient_card.dart';
@@ -349,9 +350,12 @@ class DashboardScreen extends ConsumerWidget {
             child: const Text('Later'),
           ),
           FilledButton(
-            onPressed: () {
+            onPressed: () async {
               Navigator.pop(context);
-              // TODO: open developer.ebay.com
+              final uri = Uri.parse('https://developer.ebay.com');
+              if (await canLaunchUrl(uri)) {
+                await launchUrl(uri, mode: LaunchMode.externalApplication);
+              }
             },
             child: const Text('Open eBay Developer'),
           ),
